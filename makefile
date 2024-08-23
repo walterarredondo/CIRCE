@@ -1,8 +1,13 @@
-main.o : ./src/c/main.c
-	gcc -Wall -Wextra -std=c11 -o ./target/main  ./src/c/main.c
+SRC_DIR = ./src/c
+BIN_DIR = ./bin
+LIB_DIR =/usr/local/include/unity
 
-execute : ./target/main
-	./target/main 
+main.o : $(SRC_DIR)/main.c 
+	@mkdir -p $(BIN_DIR)
+	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/main  $(SRC_DIR)/main.c  -I$(LIB_DIR)
+
+execute : $(BIN_DIR)/main
+	$(BIN_DIR)/main 
 
 clean : 
-	rm ./target/main
+	rm -rf $(BIN_DIR)
