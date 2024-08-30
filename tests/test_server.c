@@ -1,6 +1,6 @@
 #include "unity.h"
 #include <string.h>
-#include "../include/server.h" 
+#include "server.h" 
 
 Server server; //Variable global necesaria para llamar a las macros de la biblioteca Unity
 
@@ -24,7 +24,7 @@ void test_ServerAcceptsClientConnection(void) {
     // Simula una conexión de cliente (esto podría requerir un cliente simulado)
 
     
-    char* server_response = Server_acceptClient(&server);
+    char *server_response = Server_acceptClient();
     char expected_string[] = "{ \"type\": \"RESPONSE\", \"operation\": \"IDENTIFY\", \"result\": \"SUCCESS\", \"extra\": \"Kimberly\" }";
     
     // Verifica que el cliente fue aceptado correctamente
