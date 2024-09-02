@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include "unity.h"
 
 int main() {
    // printf() displays the string inside quotation

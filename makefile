@@ -5,9 +5,15 @@ INCLUDE_DIR = ./include
 TEST_DIR = ./tests
 
 # Compiling the main program
-main.o: $(SRC_DIR)/main.c $(SRC_DIR)/server.c $(INCLUDE_DIR)/server.h
+main.o: $(SRC_DIR)/main.c $(INCLUDE_DIR)/server.h
 	@mkdir -p $(BIN_DIR)
-	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/main $(SRC_DIR)/main.c $(SRC_DIR)/server.c -I$(LIB_DIR) -I$(INCLUDE_DIR)
+	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/main $(SRC_DIR)/main.c $(SRC_DIR)/server.c -I$(INCLUDE_DIR) -ljansson
+
+server: $(SRC_DIR)/server.c $(INCLUDE_DIR)/server.h
+	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/server $(SRC_DIR)/server.c -I$(INCLUDE_DIR) -ljansson -lpthread
+
+client: $(SRC_DIR)/client.c $(INCLUDE_DIR)/client.h
+	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/client $(SRC_DIR)/client.c -I$(INCLUDE_DIR) -ljansson -lpthread
 
 # Execute the main program
 execute: $(BIN_DIR)/main
