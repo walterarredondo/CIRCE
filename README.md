@@ -6,6 +6,8 @@ The Core Internet Relay Chat Engine (CIRCE) is a versatile and robust library de
 This project requires the following:
 
 * **glib2.0:** This is a fundamental library for application development in C. You can find installation instructions for your system online.
+* **jansson:** This is a C library for dealing with JSON data. You can find installation instructions for your system online.
+
 
 **Optional:**
 
