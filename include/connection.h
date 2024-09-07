@@ -45,5 +45,7 @@ void set_socket_options(int server_fd, struct server_config *config);
 void bind_socket(int server_fd, struct sockaddr_in *address, struct server_config *config);
 void start_listening(int server_fd, struct server_config *config);
 int accept_connection(int server_fd, struct sockaddr_in *address);
-
+// Function to connect to the server
+int connect_to_server(int server_fd, struct sockaddr_in *server_addr);
+int setup_server_address(struct server_config *config, struct sockaddr_in *address);
 #endif // SERVER_UTILS_H

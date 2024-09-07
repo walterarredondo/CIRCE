@@ -105,3 +105,25 @@ int accept_connection(int server_fd, struct sockaddr_in *address) {
     return new_socket;
 }
 
+int connect_to_server(int server_fd, struct sockaddr_in *server_addr) {
+    if (connect(server_fd, (struct sockaddr *)server_addr, sizeof(*server_addr)) < 0) {
+        perror("Connection failed");
+        return 1;
+    }
+    printf("Connected to server\n");
+    return 0;
+}
+
+
+// Function to set up the server address structure
+int setup_server_address(struct server_config *config, struct sockaddr_in *address) {
+    address->sin_family = AF_INET;
+    address->sin_port = htons(config->port);
+
+    // Convert IP address from text to binary form
+    if (inet_pton(AF_INET, config->ip_address, &address->sin_addr) <= 0) {
+        perror("Invalid address / Address not supported");
+        return 1;
+    }
+    return 0;
+}

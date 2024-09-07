@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include "client.h"
 #include "json_utils.h"
-
+#include "connection.h"
 #define PORT 1234
 #define LOCALHOST "127.0.0.1"
 #define MAX_BUFFER 8192
@@ -19,53 +19,28 @@
 
 
 int main(int argc, char const* argv[]) {
-    int sock;
-    struct sockaddr_in server_addr;
-    char *message = "hello";
+    int new_socket;
+    struct sockaddr_in address; 
+    struct server_config config = initialize_config();
 
-    // Create socket
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Socket creation error\n");
-        return 1;
-    }
-
-    // Set up the server address struct
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
-
-    // Convert IPv4 and IPv6 addresses from text to binary form
-    if (inet_pton(AF_INET, LOCALHOST, &server_addr.sin_addr) <= 0) {
-        perror("Invalid address/ Address not supported\n");
-        return 1;
-    }
-
-    // Connect to the server
-    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Connection failed\n");
-        return 1;
-    }
-
-
+    int client_fd = create_socket();
+    set_socket_options(client_fd,&config);
+    //bind_socket(client_fd, &address, &config);
+    setup_server_address(&config, &address);
+    connect_to_server(client_fd, &address);
 
     char username[50];  // Maximum username length of 49 characters (plus null terminator)
     ask_for_username(username, sizeof(username));
 
-    identify_client(sock, username);
+    identify_client(client_fd, username);
 
 
-    for (size_t i = 0; i < 10; i++)
-    {
-        // Send the message "hello" to the server
-        sleep(1);
-        //printf("Message %i sent: %s\n", i,  message);
-    }
+    sleep(10);
 
 
     printf("closing the client, goodbye");
-    
-
     // Close the socket
-    close(sock);
+    close(client_fd);
 
     return 0; 
 }
