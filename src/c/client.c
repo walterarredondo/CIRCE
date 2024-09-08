@@ -11,6 +11,7 @@
 #include "client.h"
 #include "json_utils.h"
 #include "connection.h"
+#include "common.h"
 #define PORT 1234
 #define LOCALHOST "127.0.0.1"
 #define MAX_BUFFER 8192
@@ -19,31 +20,82 @@
 
 
 int main(int argc, char const* argv[]) {
-    int new_socket;
     struct sockaddr_in address; 
     struct server_config config = initialize_config();
 
-    int client_fd = create_socket();
-    set_socket_options(client_fd,&config);
-    //bind_socket(client_fd, &address, &config);
+    int sock = create_socket();
+    set_socket_options(sock,&config);
     setup_server_address(&config, &address);
-    connect_to_server(client_fd, &address);
-
-    char username[50];  // Maximum username length of 49 characters (plus null terminator)
-    ask_for_username(username, sizeof(username));
-
-    identify_client(client_fd, username);
+    connect_to_server(sock, &address);
 
 
-    sleep(10);
+    pthread_t ptid; 
+    
 
+    listener_args_t *args = malloc(sizeof(listener_args_t));
+    if (args == NULL) {
+        perror("malloc failure");
+        exit(EXIT_FAILURE);
+    }
+    args->socket = sock;
+    args->process_message = process_message; 
+    pthread_create(&ptid, NULL, &listener, (void *)args); 
 
-    printf("closing the client, goodbye");
-    // Close the socket
-    close(client_fd);
+    char buffer[MAX_BUFFER];
+    char command[16];
+    char params[MAX_BUFFER];
+    bool running = true;
 
-    return 0; 
+    while (running) {
+        if (!get_input(buffer)) {
+            continue;
+        }
+
+        if (parse_command(buffer, command, params)) {
+            if (is_leave_command(command)) {
+                running = false;
+            } else {
+                execute_command(sock, command, params);
+            }
+        } else {
+            printf("Invalid input. Commands should start with '\\'.\n");
+        }
+    } 
+    close(sock);
+    return 0;
 }
+
+
+// Execute the parsed command and pass the arguments
+void execute_command(int sock, const char *command, const char *args) {
+    switch (get_command_type(command)) {
+        case CMD_HELP:
+            handle_help(args);
+            break;
+        case CMD_ECHO:
+            handle_echo(args);
+            break;
+        case CMD_LOGIN:
+            handle_login(sock, args);
+            break;
+        default:
+            handle_unknown(command);
+            break;
+    }
+}
+
+
+void handle_login(int sock, const char *username){
+    //char username[50];  // Maximum username length of 49 characters (plus null terminator)
+    //ask_for_username(username, sizeof(username));
+    identify_client(sock, username);
+}
+
+void process_message(int socket, char *buffer, const char *msg_type){
+    // Client-specific message processing
+    printf("Client processing message:\n%s\n", buffer);
+}
+
 
 
 void ask_for_username(char *username, int max_len) {
@@ -57,7 +109,7 @@ void ask_for_username(char *username, int max_len) {
     }
 }
 
-int identify_client(int sock, char *user){
+int identify_client(int sock, const char *user){
     char json_str[256] = "";  // Start with an empty JSON string
     const char *fields_and_values[][2] = {
         {"type", "IDENTIFY"},
@@ -74,4 +126,56 @@ int identify_client(int sock, char *user){
         return 0;
     }
     return 1;
+}
+
+
+
+// Get input from the user
+bool get_input(char *buffer) {
+    printf("> ");
+    return fgets(buffer, MAX_BUFFER, stdin) != NULL;
+}
+
+// Parse the command and arguments from the input buffer
+bool parse_command(const char *buffer, char *command, char *args) {
+    if (sscanf(buffer, "%s %[^\n]", command, args) >= 1 && command[0] == '\\') {
+        return true;
+    }
+    return false;
+}
+
+// Check if the command is '\leave'
+bool is_leave_command(const char *command) {
+    return strcmp(command, "\\leave") == 0;
+}
+
+// Handle the '\help' command
+void handle_help(const char *args) {
+    printf("Available commands:\n");
+    printf("\\help - Show this help message\n");
+    printf("\\echo <text> - Echo the provided text\n");
+    printf("\\login USER - send identification message to the server\n");
+    printf("\\leave - Exit the program\n");
+}
+
+// Handle the '\echo' command
+void handle_echo(const char *args) {
+    printf("Echo: %s\n", args);
+}
+
+// Handle unknown commands
+void handle_unknown(const char *command) {
+    printf("Unknown command: %s\n", command);
+}
+
+enum Command get_command_type(const char* command) {
+    if (strcmp(command, "\\help") == 0) {
+        return CMD_HELP;
+    } else if (strcmp(command, "\\echo") == 0) {
+        return CMD_ECHO;
+    } else if (strcmp(command, "\\login") == 0) {
+        return CMD_LOGIN;
+    } else {
+        return CMD_UNKNOWN;
+    }
 }

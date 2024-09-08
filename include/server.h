@@ -15,6 +15,7 @@ typedef struct {
 
 
 Server *server_init();
+void handle_sigint(int sig);
 void server_cleanup(Server *server);
 UserInfo* create_user(const char *username, const char *status, int socket);
 void free_user(gpointer data);
@@ -27,7 +28,7 @@ char* Server_acceptClient();
 int identify_user(int sock, char* buffer, char * id, size_t max_size);
 
 
-void *listener(void *arg);
+//void *listener(void *arg);
 
 
 void process_message(int, char *, const char *);

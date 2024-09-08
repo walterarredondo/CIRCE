@@ -8,16 +8,19 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <glib.h>
-#include "client.h"
 #include "server.h"
 #include "json_utils.h"
 #include "connection.h"
+#include "common.h"
 #define PORT 1234
 #define MAX_BUFFER 8192
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
 Server *server;
+
+// Flag to indicate if Ctrl+C (SIGINT) was caught
+volatile sig_atomic_t stop = 0;
 
 int main(int argc, char const* argv[]) {
     int new_socket;
@@ -29,51 +32,26 @@ int main(int argc, char const* argv[]) {
     set_socket_options(server_fd,&config);
     bind_socket(server_fd, &address, &config);
 
-    while (true){
+    signal(SIGINT, handle_sigint);
+    while (!stop){
         pthread_t ptid; 
         start_listening(server_fd, &config);
         new_socket = accept_connection(server_fd, &address);
 
-        // Pass the new_socket handle to the client_manager function
-        int *new_sock_ptr = malloc(sizeof(int));
-        if (new_sock_ptr == NULL) {
+        listener_args_t *args = malloc(sizeof(listener_args_t));
+        if (args == NULL) {
             perror("malloc failure");
             exit(EXIT_FAILURE);
         }
-        *new_sock_ptr = new_socket;
-        pthread_create(&ptid, NULL, &listener, new_sock_ptr); 
+        args->socket = new_socket;
+        args->process_message = process_message; 
+        pthread_create(&ptid, NULL, &listener, (void *)args); 
     }
 
-    // closing the listening socket
     close(server_fd);
-
-
     return 0;
 }
 
-void *listener(void *arg){
-    int new_socket = *(int*)arg;
-    pthread_detach(pthread_self()); 
-    free(arg);
-    ssize_t valread = 1;
-    char buffer[MAX_BUFFER] = { 0 };
-    char msg_type[TYPE_MAX_LENGHT] = { 0 };
-
-    while (valread != 0){
-        valread = read(new_socket, buffer, MAX_BUFFER); // subtract 1 for the null
-        if(valread <= 0){
-            continue;
-        }
-        if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
-            printf("not a valid json: field 'type' missing\n");
-            continue;
-        }
-        process_message(new_socket, buffer, msg_type);
-    }
-
-    close(new_socket);
-    return NULL;
-}
 
 void process_message(int sock, char *buffer, const char *message_type) {
     // Use strcmp to compare strings and switch-case for handling various message types
@@ -110,6 +88,8 @@ void process_message(int sock, char *buffer, const char *message_type) {
         printf("Unknown message type: %s\n", message_type);
     }
 }
+
+
 
 void handle_identify(int sock, char* buffer){
     char username[USER_MAX_LENGHT];  
@@ -295,4 +275,10 @@ void server_add_user(const char *username, const char *status, int socket) {
 // Function to remove a user from the server's user table
 void server_remove_user(const char *username) {
     g_hash_table_remove(server->user_table, username);
+}
+
+void handle_sigint(int sig){
+    //implement a way to close each socket, and close each thread
+    printf("\nleaving...\ngoodbye!\n");
+    stop = 1;
 }
