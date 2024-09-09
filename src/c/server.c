@@ -22,7 +22,6 @@ Server *server;
 
 // Flag to indicate if Ctrl+C (SIGINT) was caught
 static volatile sig_atomic_t stop = 0;
-// list of threads, needs to be global to be called by handle_sigint
 
 int main(int argc, char const* argv[]) {
     int new_socket;
@@ -37,23 +36,9 @@ int main(int argc, char const* argv[]) {
     bind_socket(server_fd, &address, &config);
     signal(SIGINT, handle_sigint);
     while (!stop){
-        pthread_t ptid; 
         start_listening(server_fd, &config);
         new_socket = accept_connection(server_fd, &address);
-
-        listener_args_t *args = malloc(sizeof(listener_args_t));
-        if (args == NULL) {
-            perror("malloc failure");
-            exit(EXIT_FAILURE);
-        }
-        args->socket = new_socket;
-        args->process_message = process_message; 
-        pthread_create(&ptid, NULL, &listener, (void *)args); 
-        pthread_detach(ptid);
-        pthread_t *thread_copy = malloc(sizeof(pthread_t));
-        *thread_copy = ptid;
-        thread_list = g_list_append(thread_list, thread_copy);
-        
+        thread_list = create_listener_thread(new_socket, thread_list);
     }
     printf("quitting gracefully. goodbye!");
     g_list_free_full(thread_list, free); 
@@ -294,4 +279,35 @@ static void handle_sigint(int _){
     kill(-getpgrp(), SIGQUIT); 
 }
 
+GList *create_listener_thread(int new_socket, GList *thread_list) {
+    pthread_t ptid; 
+    // Allocate memory for listener arguments
+    listener_args_t *args = malloc(sizeof(listener_args_t));
+    if (args == NULL) {
+        perror("malloc failure");
+        exit(EXIT_FAILURE);
+    }
 
+    // Set the arguments for the listener
+    args->socket = new_socket;
+    args->process_message = process_message;
+
+    // Create the new thread
+    if (pthread_create(&ptid, NULL, &listener, (void *)args) != 0) {
+        perror("pthread_create failure");
+        exit(EXIT_FAILURE);
+    }
+
+    // Copy the thread ID
+    pthread_t *thread_copy = malloc(sizeof(pthread_t));
+    if (thread_copy == NULL) {
+        perror("malloc failure");
+        exit(EXIT_FAILURE);
+    }
+    *thread_copy = ptid;
+
+    // Append the thread to the thread list
+    thread_list = g_list_append(thread_list, thread_copy);
+
+    return thread_list;
+}

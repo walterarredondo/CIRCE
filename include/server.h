@@ -15,6 +15,7 @@ typedef struct {
 
 Server *server_init();
 
+GList *create_listener_thread(int new_socket, GList *thread_list);
 static void handle_sigint(int _);
 void server_cleanup(Server *server);
 UserInfo* create_user(const char *username, const char *status, int socket);

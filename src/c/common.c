@@ -14,7 +14,6 @@ void *listener(void *arg){
     listener_args_t *args = (listener_args_t *)arg;
     int new_socket = args->socket;
     process_message_func process_message = args->process_message; 
-
     pthread_detach(pthread_self());
 
     free(arg);
