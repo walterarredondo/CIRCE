@@ -12,13 +12,11 @@
 #include "server.h"
 #include "json_utils.h"
 #include "connection.h"
-#include "common.h"
 #define PORT 1234
 #define MAX_BUFFER 8192
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
-Server *server;
 
 // Flag to indicate if Ctrl+C (SIGINT) was caught
 static volatile sig_atomic_t stop = 0;
@@ -26,7 +24,7 @@ static volatile sig_atomic_t stop = 0;
 int main(int argc, char const* argv[]) {
     int new_socket;
     struct sockaddr_in address; 
-    server = server_init(); 
+    Server *server = server_init(); 
     GList *thread_list = NULL;
 
 
@@ -38,7 +36,7 @@ int main(int argc, char const* argv[]) {
     while (!stop){
         start_listening(server_fd, &config);
         new_socket = accept_connection(server_fd, &address);
-        thread_list = create_listener_thread(new_socket, thread_list);
+        thread_list = create_listener_thread(server, new_socket, thread_list);
     }
     printf("quitting gracefully. goodbye!");
     g_list_free_full(thread_list, free); 
@@ -47,11 +45,46 @@ int main(int argc, char const* argv[]) {
 }
 
 
-void process_message(int sock, char *buffer, const char *message_type) {
+void *listener(void *arg){
+    listener_args_t *args = (listener_args_t *)arg;
+    int sock = args->socket;
+    Server *server = args->server;
+
+    if (server->user_table == NULL) {
+        fprintf(stderr, "Error: user_table is NULL\n");
+        return NULL;
+    }
+
+    free(arg);
+
+    pthread_detach(pthread_self());
+
+    ssize_t valread = 1;
+    char buffer[MAX_BUFFER] = { 0 };
+    char msg_type[TYPE_MAX_LENGHT] = { 0 };
+
+    while (valread != 0){
+        valread = read(sock, buffer, MAX_BUFFER);
+        if(valread <= 0){
+            continue;
+        }
+        printf("received: %s\n",buffer);
+        if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
+            printf("not a valid json: field 'type' missing\n");
+            continue;
+        }
+       process_message(server, sock, buffer, msg_type);
+    }
+    close(sock);
+    return NULL;
+}
+
+
+void process_message(Server *server, int sock, char *buffer, const char *message_type) {
     // Use strcmp to compare strings and switch-case for handling various message types
     printf("type: %s\n",message_type);
     if (strcmp(message_type, "IDENTIFY") == 0) {
-        handle_identify(sock, buffer);
+        handle_identify(server, sock, buffer);
     } else if (strcmp(message_type, "RESPONSE") == 0) {
         handle_response();
     } else if (strcmp(message_type, "NEW_USER") == 0) {
@@ -85,7 +118,7 @@ void process_message(int sock, char *buffer, const char *message_type) {
 
 
 
-void handle_identify(int sock, char* buffer){
+void handle_identify(Server *server, int sock, char* buffer){
     char username[USER_MAX_LENGHT];  
     printf("Handling IDENTIFY\n");
     if(!identify_user(sock, buffer, username, USER_MAX_LENGHT)){
@@ -96,17 +129,18 @@ void handle_identify(int sock, char* buffer){
     printf("username is: %s\n",username);
     UserInfo *found_user = g_hash_table_lookup(server->user_table, username);
     if (found_user) {
-        if(identify_response_failed(sock,username)){
+        if(!identify_response_failed(sock,username)){
             printf("failed sending the failed identification response\n");
         }
         printf("\nUser already exists, choose another one %s\n", found_user->username);
     } else {
-        server_add_user(username,"ONLINE",sock);
+        server_add_user(server, username,"ONLINE",sock);
         if(!identify_response_success(sock,username)){
             printf("Response to identification failed\n");
         }
-        //send for each client connected response
         printf("\nUser %s added to the server user list.\n", username);
+        send_json_except_user(server,username);
+        printf("All responses to clients were sent.\n");
     }
 
 }
@@ -193,17 +227,8 @@ int identify_response_success(int sock, char *user){
         {"result", "SUCCESS"},
         {"extra", user}
     };
-
     size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
-
-    if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
-        send(sock, json_str, strlen(json_str), 0);
-        printf("JSON sent to the client:\n%s\n", json_str);
-    } else {
-        printf("Failed to build JSON response.\n");
-        return 0;
-    }
-    return 1;
+    return send_json_response(sock, json_str, sizeof(json_str), fields_and_values, num_fields);
 }
 
 
@@ -215,24 +240,68 @@ int identify_response_failed(int sock, char *user){
         {"result", "USER_ALREADY_EXISTS"},
         {"extra", user}
     };
-
     size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
-
-    if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
-        send(sock, json_str, strlen(json_str), 0);
-        printf("JSON sent to the client:\n%s\n", json_str);
-    } else {
-        printf("Failed to build JSON response.\n");
-        return 0;
-    }
-    return 1;
+    return send_json_response(sock, json_str, sizeof(json_str), fields_and_values, num_fields);
 }
 
 
-// Function to initialize the server and the user table
+void send_json_except_user(Server *server, const char *exclude_username) {
+    GHashTableIter iter;
+    gpointer key, value;
+    char json_str[1024] = ""; // Buffer for the JSON string response
+    const char *fields_and_values[][2] = {
+        {"type", "NEW_USER"},
+        {"username", exclude_username}
+    };
+    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+    g_hash_table_iter_init(&iter, server->user_table);
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+        UserInfo *user = (UserInfo *)value;
+        // Skip the user with the provided username
+        if (g_strcmp0(user->username, exclude_username) == 0) {
+            continue;
+        }
+        if (!send_json_response(user->socket, json_str, sizeof(json_str), fields_and_values,num_fields)) {
+            printf("Failed to send JSON response to user: %s\n", user->username);
+        }
+    }
+}
+
+
+
+
+int send_json_response(int sock, char *json_str, size_t json_str_size ,const char *fields_and_values[][2], size_t num_fields) {
+    // Calculate the number of fields based on the size of fields_and_values
+    // Build the JSON response
+
+    if (build_json_response(json_str, json_str_size, fields_and_values, num_fields)) {
+        // Send JSON response to the client
+        send(sock, json_str, strlen(json_str), 0);
+        printf("JSON sent to the client:\n%s\n", json_str);
+        return 1; // Success
+    } else {
+        printf("Failed to build JSON response.\n");
+        return 0; // Failure
+    }
+}
+
+
+
 Server* server_init() {
-    Server *server = g_new(Server, 1);
+    Server *server = (Server*)malloc(sizeof(Server));
+    if (server == NULL) {
+        // Handle memory allocation failure
+        return NULL;
+    }
+
+    // Initialize the user table
     server->user_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, free_user);
+    if (server->user_table == NULL) {
+        // Handle hash table creation failure
+        printf("error null user_table");
+        free(server);
+        return NULL;
+    }
     return server;
 }
 
@@ -262,12 +331,12 @@ void free_user(gpointer data) {
 
 
 // Function to add a user to the server's user table
-void server_add_user(const char *username, const char *status, int socket) {
+void server_add_user(Server *server, const char *username, const char *status, int socket) {
     g_hash_table_insert(server->user_table, g_strdup(username), create_user(username, status, socket));
 }
 
 // Function to remove a user from the server's user table
-void server_remove_user(const char *username) {
+void server_remove_user(Server *server, const char *username) {
     g_hash_table_remove(server->user_table, username);
 }
 
@@ -279,7 +348,7 @@ static void handle_sigint(int _){
     kill(-getpgrp(), SIGQUIT); 
 }
 
-GList *create_listener_thread(int new_socket, GList *thread_list) {
+GList *create_listener_thread(Server *server, int new_socket, GList *thread_list) {
     pthread_t ptid; 
     // Allocate memory for listener arguments
     listener_args_t *args = malloc(sizeof(listener_args_t));
@@ -289,8 +358,8 @@ GList *create_listener_thread(int new_socket, GList *thread_list) {
     }
 
     // Set the arguments for the listener
+    args->server = server;
     args->socket = new_socket;
-    args->process_message = process_message;
 
     // Create the new thread
     if (pthread_create(&ptid, NULL, &listener, (void *)args) != 0) {

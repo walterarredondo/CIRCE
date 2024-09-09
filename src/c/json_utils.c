@@ -120,18 +120,21 @@ int json_add_string_field(char *json_str, size_t json_str_size, const char *fiel
     if (strlen(json_str) == 0) {
         root = json_object();
         if (!root) {
+            printf("failed to create json\n");
             return 0; // Failed to create a new JSON object
         }
     } else {
         // If the input JSON string is not empty, parse the existing JSON
         root = json_loads(json_str, 0, &error);
         if (!root) {
+            printf("failed to parse json\n");
             return 0; // Failed to parse JSON string
         }
     }
 
     // Add or update the field with the specified string value
     if (json_object_set_new(root, field, json_string(value)) != 0) {
+        printf("error adding/updating field:%s\t with value: %s\n",field,value);
         json_decref(root);
         return 0; // Failed to add or update the field
     }
@@ -139,12 +142,14 @@ int json_add_string_field(char *json_str, size_t json_str_size, const char *fiel
     // Convert the JSON object back to a string
     char *new_json_str = json_dumps(root, JSON_COMPACT);
     if (!new_json_str) {
+        printf("error converting json back to string\n");
         json_decref(root);
         return 0; // Failed to convert JSON object to string
     }
 
     // Ensure the new JSON string fits within the provided buffer size
     if (strlen(new_json_str) >= json_str_size) {
+        printf("new json: %li >= json string size: %li\n", strlen(new_json_str), json_str_size);
         free(new_json_str);
         json_decref(root);
         return 0; // New JSON string exceeds buffer size
@@ -169,6 +174,7 @@ int build_json_response(char *json_str, size_t json_str_size, const char *fields
 
         if (!json_add_string_field(json_str, json_str_size, field, value)) {
             printf("Failed to add field '%s' to JSON.\n", field);
+            printf("error in field: %s \tvalue: %s\n",fields_and_values[i][0],fields_and_values[i][1]);
             return 0;  // Return 0 on failure
         }
     }

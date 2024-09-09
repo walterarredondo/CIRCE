@@ -11,7 +11,6 @@
 #include "client.h"
 #include "json_utils.h"
 #include "connection.h"
-#include "common.h"
 #define PORT 1234
 #define LOCALHOST "127.0.0.1"
 #define MAX_BUFFER 8192
@@ -54,6 +53,36 @@ int main(int argc, char const* argv[]) {
     return 0;
 }
 
+void *listener(void *arg){
+    listener_args_t *args = (listener_args_t *)arg;
+    int sock = args->socket;
+    Client *client = args->client;
+    free(arg);
+
+    pthread_detach(pthread_self());
+
+    ssize_t valread = 1;
+    char buffer[MAX_BUFFER];
+    char msg_type[TYPE_MAX_LENGHT];
+
+    while (valread != 0){
+        memset(buffer, 0, sizeof(buffer)); 
+        memset(msg_type, 0, sizeof(msg_type)); 
+        valread = read(sock, buffer, MAX_BUFFER);
+        if(valread <= 0){
+            continue;
+        }
+        printf("echo:\n%s\n",buffer);
+        if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
+            printf("not a valid json: field 'type' missing\n");
+            continue;
+        }
+       process_message(client, sock, buffer, msg_type);
+    }
+    close(sock);
+    return NULL;
+}
+
 int create_listener(int sock){
     pthread_t ptid; 
     listener_args_t *args = malloc(sizeof(listener_args_t));
@@ -93,7 +122,7 @@ void handle_login(int sock, const char *username){
     identify_client(sock, username);
 }
 
-void process_message(int socket, char *buffer, const char *msg_type){
+void process_message(Client *client, int socket, char *buffer, const char *msg_type){
     // Client-specific message processing
     printf("Client processing message:\n%s\n", buffer);
 }

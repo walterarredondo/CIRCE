@@ -2,7 +2,7 @@ typedef struct {
     int* fd_id;
     char username[8];
     char status[];
-} client;
+} Client;
 
 
 enum Command {
@@ -11,6 +11,14 @@ enum Command {
     CMD_LOGIN,
     CMD_UNKNOWN
 };
+
+typedef void (*process_message_func)(Client *client, int, char *, const char *);
+
+typedef struct {
+    Client *client;
+    int socket;
+    process_message_func process_message;
+} listener_args_t;
 
 
 enum Command get_command_type(const char* command);
@@ -27,7 +35,7 @@ int create_listener(int sock);
 
 
 
-void process_message(int, char *, const char *);
+void process_message(Client *client, int, char *, const char *);
 void handle_identify();
 void handle_response();
 void handle_new_user();
