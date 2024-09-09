@@ -1,6 +1,5 @@
 #ifndef CIRCE_SERVER_H
 #define CIRCE_SERVER_H
-#include <glib.h>
 
 
 typedef struct {
@@ -15,7 +14,8 @@ typedef struct {
 
 
 Server *server_init();
-void handle_sigint(int sig);
+
+static void handle_sigint(int _);
 void server_cleanup(Server *server);
 UserInfo* create_user(const char *username, const char *status, int socket);
 void free_user(gpointer data);

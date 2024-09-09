@@ -7,7 +7,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <arpa/inet.h>
+#include <signal.h>
 #include "client.h"
 #include "json_utils.h"
 #include "connection.h"
@@ -18,20 +18,44 @@
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
+volatile sig_atomic_t stop = 0;
 
 int main(int argc, char const* argv[]) {
     struct sockaddr_in address; 
     struct server_config config = initialize_config();
-
-    int sock = create_socket();
+    int sock;
+    char buffer[MAX_BUFFER];
+    char command[16];
+    char msg[MAX_BUFFER];
+    bool running = true;
+    
+    sock = create_socket();
     set_socket_options(sock,&config);
     setup_server_address(&config, &address);
-    connect_to_server(sock, &address);
+    signal(SIGINT, handle_sigint);
+    if (connect_to_server(sock, &address) && create_listener(sock)){
+        while (running && !stop) {
+            if (!get_input(buffer)) {
+                continue;
+            }
 
+            if (parse_command(buffer, command, msg)) {
+                if (is_leave_command(command)) {
+                    running = false;
+                } else {
+                    execute_command(sock, command, msg);
+                }
+            } else {
+                printf("Invalid input. Commands should start with '\\'.\n");
+            }
+        } 
+    }
+    close(sock);
+    return 0;
+}
 
+int create_listener(int sock){
     pthread_t ptid; 
-    
-
     listener_args_t *args = malloc(sizeof(listener_args_t));
     if (args == NULL) {
         perror("malloc failure");
@@ -40,29 +64,7 @@ int main(int argc, char const* argv[]) {
     args->socket = sock;
     args->process_message = process_message; 
     pthread_create(&ptid, NULL, &listener, (void *)args); 
-
-    char buffer[MAX_BUFFER];
-    char command[16];
-    char params[MAX_BUFFER];
-    bool running = true;
-
-    while (running) {
-        if (!get_input(buffer)) {
-            continue;
-        }
-
-        if (parse_command(buffer, command, params)) {
-            if (is_leave_command(command)) {
-                running = false;
-            } else {
-                execute_command(sock, command, params);
-            }
-        } else {
-            printf("Invalid input. Commands should start with '\\'.\n");
-        }
-    } 
-    close(sock);
-    return 0;
+    return 1;
 }
 
 
@@ -178,4 +180,10 @@ enum Command get_command_type(const char* command) {
     } else {
         return CMD_UNKNOWN;
     }
+}
+
+void handle_sigint(int sig){
+    //implement a way to close each socket, and close each thread
+    printf("\nleaving...\ngoodbye!\n");
+    stop = 1;
 }

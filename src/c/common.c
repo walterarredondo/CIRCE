@@ -15,7 +15,8 @@ void *listener(void *arg){
     int new_socket = args->socket;
     process_message_func process_message = args->process_message; 
 
-    pthread_detach(pthread_self()); 
+    pthread_detach(pthread_self());
+
     free(arg);
     ssize_t valread = 1;
     char buffer[MAX_BUFFER] = { 0 };

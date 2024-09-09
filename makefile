@@ -16,7 +16,7 @@ main.o: $(SRC_DIR)/main.c
 	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/main $(SRC_DIR)/main.c -I$(INCLUDE_DIR) -ljansson
 
 server: $(SRC_DIR)/server.c $(INCLUDE_DIR)/server.h  $(INCLUDE_DIR)/json_utils.h  $(INCLUDE_DIR)/connection.h 
-	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/server $(SRC_DIR)/server.c $(SRC_DIR)/json_utils.c $(SRC_DIR)/connection.c $(SRC_DIR)/common.c -I$(INCLUDE_DIR) $(CFLAGS) $(LDLIBS) -lglib-2.0 -ljansson -lpthread
+	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/server $(SRC_DIR)/server.c $(SRC_DIR)/json_utils.c $(SRC_DIR)/connection.c $(SRC_DIR)/common.c -I$(INCLUDE_DIR) $(CFLAGS) $(LDLIBS) -lglib-2.0 -ljansson -lpthread 
 
 client: $(SRC_DIR)/client.c $(INCLUDE_DIR)/client.h  $(INCLUDE_DIR)/json_utils.h $(INCLUDE_DIR)/connection.h 
 	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/client $(SRC_DIR)/client.c -I$(INCLUDE_DIR) $(SRC_DIR)/json_utils.c $(SRC_DIR)/connection.c $(SRC_DIR)/common.c $(CFLAGS) $(LDLIBS) -ljansson -lpthread

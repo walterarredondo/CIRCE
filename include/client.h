@@ -16,10 +16,12 @@ enum Command {
 enum Command get_command_type(const char* command);
 
 
+void handle_sigint(int sig);
 
 int identify_client(int sock, const char* user);
 
 void ask_for_username(char *username, int max_len);
+int create_listener(int sock);
 
 
 

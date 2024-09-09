@@ -1,8 +1,9 @@
-
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -20,18 +21,20 @@
 Server *server;
 
 // Flag to indicate if Ctrl+C (SIGINT) was caught
-volatile sig_atomic_t stop = 0;
+static volatile sig_atomic_t stop = 0;
+// list of threads, needs to be global to be called by handle_sigint
 
 int main(int argc, char const* argv[]) {
     int new_socket;
     struct sockaddr_in address; 
     server = server_init(); 
+    GList *thread_list = NULL;
+
 
     struct server_config config = initialize_config();
     int server_fd = create_socket();
     set_socket_options(server_fd,&config);
     bind_socket(server_fd, &address, &config);
-
     signal(SIGINT, handle_sigint);
     while (!stop){
         pthread_t ptid; 
@@ -46,10 +49,16 @@ int main(int argc, char const* argv[]) {
         args->socket = new_socket;
         args->process_message = process_message; 
         pthread_create(&ptid, NULL, &listener, (void *)args); 
+        pthread_detach(ptid);
+        pthread_t *thread_copy = malloc(sizeof(pthread_t));
+        *thread_copy = ptid;
+        thread_list = g_list_append(thread_list, thread_copy);
+        
     }
-
+    printf("quitting gracefully. goodbye!");
+    g_list_free_full(thread_list, free); 
     close(server_fd);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 
@@ -277,8 +286,12 @@ void server_remove_user(const char *username) {
     g_hash_table_remove(server->user_table, username);
 }
 
-void handle_sigint(int sig){
+static void handle_sigint(int _){
+    (void)_;
     //implement a way to close each socket, and close each thread
-    printf("\nleaving...\ngoodbye!\n");
+    printf("\ngoodbye...\n");
     stop = 1;
+    kill(-getpgrp(), SIGQUIT); 
 }
+
+
