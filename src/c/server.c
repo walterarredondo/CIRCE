@@ -12,11 +12,14 @@
 #include "server.h"
 #include "json_utils.h"
 #include "connection.h"
+#include "logger.h"
 #define PORT 1234
 #define MAX_BUFFER 8192
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
+
+static const int DEBUG = 0;
 
 // Flag to indicate if Ctrl+C (SIGINT) was caught
 static volatile sig_atomic_t stop = 0;
@@ -83,36 +86,54 @@ void *listener(void *arg){
 void process_message(Server *server, int sock, char *buffer, const char *message_type) {
     // Use strcmp to compare strings and switch-case for handling various message types
     printf("type: %s\n",message_type);
-    if (strcmp(message_type, "IDENTIFY") == 0) {
-        handle_identify(server, sock, buffer);
-    } else if (strcmp(message_type, "RESPONSE") == 0) {
-        handle_response();
-    } else if (strcmp(message_type, "NEW_USER") == 0) {
-        handle_new_user();
-    } else if (strcmp(message_type, "STATUS") == 0) {
-        handle_status();
-    } else if (strcmp(message_type, "USERS") == 0) {
-        handle_users();
-    } else if (strcmp(message_type, "TEXT") == 0) {
-        handle_text();
-    } else if (strcmp(message_type, "PUBLIC_TEXT") == 0) {
-        handle_public_text();
-    } else if (strcmp(message_type, "NEW_ROOM") == 0) {
-        handle_new_room();
-    } else if (strcmp(message_type, "INVITE") == 0) {
-        handle_invite();
-    } else if (strcmp(message_type, "JOIN_ROOM") == 0) {
-        handle_join_room();
-    } else if (strcmp(message_type, "ROOM_USERS") == 0) {
-        handle_room_users();
-    } else if (strcmp(message_type, "ROOM_TEXT") == 0) {
-        handle_room_text();
-    } else if (strcmp(message_type, "LEAVE_ROOM") == 0) {
-        handle_leave_room();
-    } else if (strcmp(message_type, "DISCONNECT") == 0) {
-        handle_disconnect();
-    } else {
-        printf("Unknown message type: %s\n", message_type);
+    MessageType type = get_type(message_type);
+    switch (type) {
+        case TYPE_IDENTIFY:
+            handle_identify(server, sock, buffer);
+            break;
+        case TYPE_RESPONSE:
+            handle_response();
+            break;
+        case TYPE_NEW_USER:
+            handle_new_user();
+            break;
+        case TYPE_STATUS:
+            handle_status();
+            break;
+        case TYPE_USERS:
+            handle_users();
+            break;
+        case TYPE_TEXT:
+            handle_text();
+            break;
+        case TYPE_PUBLIC_TEXT:
+            handle_public_text();
+            break;
+        case TYPE_NEW_ROOM:
+            handle_new_room();
+            break;
+        case TYPE_INVITE:
+            handle_invite();
+            break;
+        case TYPE_JOIN_ROOM:
+            handle_join_room();
+            break;
+        case TYPE_ROOM_USERS:
+            handle_room_users();
+            break;
+        case TYPE_ROOM_TEXT:
+            handle_room_text();
+            break;
+        case TYPE_LEAVE_ROOM:
+            handle_leave_room();
+            break;
+        case TYPE_DISCONNECT:
+            handle_disconnect();
+            break;
+        case TYPE_UNKNOWN:
+        default:
+            printf("Unknown message type: %s\n", message_type);
+            break;
     }
 }
 
@@ -379,4 +400,38 @@ GList *create_listener_thread(Server *server, int new_socket, GList *thread_list
     thread_list = g_list_append(thread_list, thread_copy);
 
     return thread_list;
+}
+
+MessageType get_type(const char *message_type) {
+    if (strcmp(message_type, "IDENTIFY") == 0) {
+        return TYPE_IDENTIFY;
+    } else if (strcmp(message_type, "RESPONSE") == 0) {
+        return TYPE_RESPONSE;
+    } else if (strcmp(message_type, "NEW_USER") == 0) {
+        return TYPE_NEW_USER;
+    } else if (strcmp(message_type, "STATUS") == 0) {
+        return TYPE_STATUS;
+    } else if (strcmp(message_type, "USERS") == 0) {
+        return TYPE_USERS;
+    } else if (strcmp(message_type, "TEXT") == 0) {
+        return TYPE_TEXT;
+    } else if (strcmp(message_type, "PUBLIC_TEXT") == 0) {
+        return TYPE_PUBLIC_TEXT;
+    } else if (strcmp(message_type, "NEW_ROOM") == 0) {
+        return TYPE_NEW_ROOM;
+    } else if (strcmp(message_type, "INVITE") == 0) {
+        return TYPE_INVITE;
+    } else if (strcmp(message_type, "JOIN_ROOM") == 0) {
+        return TYPE_JOIN_ROOM;
+    } else if (strcmp(message_type, "ROOM_USERS") == 0) {
+        return TYPE_ROOM_USERS;
+    } else if (strcmp(message_type, "ROOM_TEXT") == 0) {
+        return TYPE_ROOM_TEXT;
+    } else if (strcmp(message_type, "LEAVE_ROOM") == 0) {
+        return TYPE_LEAVE_ROOM;
+    } else if (strcmp(message_type, "DISCONNECT") == 0) {
+        return TYPE_DISCONNECT;
+    } else {
+        return TYPE_UNKNOWN;
+    }
 }

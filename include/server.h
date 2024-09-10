@@ -21,9 +21,26 @@ typedef struct {
     process_message_func process_message;
 } listener_args_t;
 
+typedef enum {
+    TYPE_IDENTIFY,
+    TYPE_RESPONSE,
+    TYPE_NEW_USER,
+    TYPE_STATUS,
+    TYPE_USERS,
+    TYPE_TEXT,
+    TYPE_PUBLIC_TEXT,
+    TYPE_NEW_ROOM,
+    TYPE_INVITE,
+    TYPE_JOIN_ROOM,
+    TYPE_ROOM_USERS,
+    TYPE_ROOM_TEXT,
+    TYPE_LEAVE_ROOM,
+    TYPE_DISCONNECT,
+    TYPE_UNKNOWN
+} MessageType;
 
 Server *server_init();
-
+MessageType get_type(const char *message_type);
 GList *create_listener_thread(Server *server, int new_socket, GList *thread_list);
 static void handle_sigint(int _);
 void server_cleanup(Server *server);

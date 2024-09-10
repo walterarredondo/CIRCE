@@ -11,9 +11,11 @@
 #include "client.h"
 #include "json_utils.h"
 #include "connection.h"
+#include "logger.h"
 #define PORT 1234
 #define LOCALHOST "127.0.0.1"
 #define MAX_BUFFER 8192
+#define MAX_BUFFER_LOG 1024
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
@@ -45,7 +47,7 @@ int main(int argc, char const* argv[]) {
                     execute_command(sock, command, msg);
                 }
             } else {
-                printf("Invalid input. Commands should start with '\\'.\n");
+                log_file_message(LOG_ERROR,"Invalid input. Commands should start with '\\'.");
             }
         } 
     }
@@ -72,9 +74,9 @@ void *listener(void *arg){
         if(valread <= 0){
             continue;
         }
-        printf("echo:\n%s\n",buffer);
+        log_formatted_message(LOG_INFO,"received json: %s",buffer);
         if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
-            printf("not a valid json: field 'type' missing\n");
+            log_file_message(LOG_ERROR,"not a valid json: field 'type' missing");
             continue;
         }
        process_message(client, sock, buffer, msg_type);
@@ -124,7 +126,7 @@ void handle_login(int sock, const char *username){
 
 void process_message(Client *client, int socket, char *buffer, const char *msg_type){
     // Client-specific message processing
-    printf("Client processing message:\n%s\n", buffer);
+    log_formatted_message(LOG_INFO,"Client processing message: %s", buffer);
 }
 
 
@@ -151,9 +153,9 @@ int identify_client(int sock, const char *user){
 
     if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
         send(sock, json_str, strlen(json_str), 0);
-        printf("JSON sent to the server:\n%s\n", json_str);
+        log_formatted_message(LOG_INFO, "JSON sent to the server: %s", json_str);
     } else {
-        printf("Failed to build JSON ID.\n");
+        log_file_message(LOG_ERROR,"Failed to build JSON ID.");
         return 0;
     }
     return 1;
@@ -213,6 +215,6 @@ enum Command get_command_type(const char* command) {
 
 void handle_sigint(int sig){
     //implement a way to close each socket, and close each thread
-    printf("\nleaving...\ngoodbye!\n");
+    log_file_message(LOG_INFO,"Leaving... Goodbye!");
     stop = 1;
 }
