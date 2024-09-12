@@ -20,7 +20,7 @@ main.o: $(SRC_DIR)/main.c
 server: $(SRC_DIR)/server.c $(INCLUDE_DIR)/server.h  $(INCLUDE_DIR)/json_utils.h  $(INCLUDE_DIR)/connection.h $(INCLUDE_DIR)/logger.h
 	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/server $(SRC_DIR)/server.c $(SRC_DIR)/json_utils.c $(SRC_DIR)/connection.c $(SRC_DIR)/logger.c -I$(INCLUDE_DIR) $(CFLAGS) $(LDLIBS) -lglib-2.0 -ljansson -lpthread 
 
-client: $(SRC_DIR)/client.c $(INCLUDE_DIR)/client.h  $(INCLUDE_DIR)/json_utils.h $(INCLUDE_DIR)/connection.h $(INCLUDE_DIR)/logger.h
+client: $(SRC_DIR)/client.c $(INCLUDE_DIR)/client.h  $(INCLUDE_DIR)/json_utils.h $(INCLUDE_DIR)/connection.h $(INCLUDE_DIR)/logger.h 
 	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/client $(SRC_DIR)/client.c -I$(INCLUDE_DIR) $(SRC_DIR)/json_utils.c $(SRC_DIR)/connection.c  $(SRC_DIR)/logger.c $(CFLAGS) $(LDLIBS) -ljansson -lpthread
 
 utils: $(SRC_DIR)/json_utils.c $(INCLUDE_DIR)/json_utils.h  
@@ -29,9 +29,6 @@ utils: $(SRC_DIR)/json_utils.c $(INCLUDE_DIR)/json_utils.h
 connection: $(SRC_DIR)/connection.c 
 	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/connection $(SRC_DIR)/connection.c -I$(SRC_DIR)/connection.c -I$(INCLUDE_DIR) -lpthread
 	
-common: $(SRC_DIR)/common.c 
-	gcc -Wall -Wextra -std=c11 -O2 -o $(BIN_DIR)/common $(SRC_DIR)/common.c -I$(SRC_DIR)/common.c -I$(INCLUDE_DIR) -lpthread
-
 # Execute the main program
 execute: $(BIN_DIR)/main
 	$(BIN_DIR)/main 

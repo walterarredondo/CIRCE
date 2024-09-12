@@ -67,6 +67,35 @@ int json_field_matches(const char *json_str, const char *field, char *value, siz
     return 1; // Field found and value extracted
 }
 
+int json_extract_field_value(const char *json_string, const char *field, char *value_buffer, size_t max_size) {
+    json_error_t error;
+    json_t *root = json_loads(json_string, 0, &error);
+
+    if (!root) {
+        return 0; // Invalid JSON
+    }
+
+    json_t *json_field = json_object_get(root, field);
+    if (!json_field) {
+        json_decref(root);
+        return 0; // Field not found
+    }
+
+    if (json_is_string(json_field)) {
+        strncpy(value_buffer, json_string_value(json_field), max_size);
+    } else if (json_is_integer(json_field)) {
+        snprintf(value_buffer, max_size, "%lld", json_integer_value(json_field));
+    } else if (json_is_real(json_field)) {
+        snprintf(value_buffer, max_size, "%f", json_real_value(json_field));
+    } else {
+        json_decref(root);
+        return 0; // Unsupported field type
+    }
+
+    json_decref(root);
+    return 1; // Field found and value extracted
+}
+
 // Retrieves the size of a string field in the JSON and checks if it's within the expected max size
 int json_string_field_size(const char *json_str, const char *tag, char *field, size_t max_size) {
     json_error_t error;

@@ -13,13 +13,12 @@
 #include "json_utils.h"
 #include "connection.h"
 #include "logger.h"
-#define PORT 1234
-#define MAX_BUFFER 8192
+#define MAX_BUFFER 2048
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
 
-static const int DEBUG = 0;
+static const char* PATH = "./log/client_logger";
 
 // Flag to indicate if Ctrl+C (SIGINT) was caught
 static volatile sig_atomic_t stop = 0;
@@ -71,6 +70,13 @@ void *listener(void *arg){
         if(valread <= 0){
             continue;
         }
+
+        // Ensure null-termination after the last character read
+        if (valread < MAX_BUFFER) {
+            buffer[valread] = '\0';  // Set the last character to null terminator
+        } else {
+            buffer[MAX_BUFFER - 1] = '\0';  // Safeguard if buffer is filled
+        }
         printf("received: %s\n",buffer);
         if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
             printf("not a valid json: field 'type' missing\n");
@@ -85,17 +91,11 @@ void *listener(void *arg){
 
 void process_message(Server *server, int sock, char *buffer, const char *message_type) {
     // Use strcmp to compare strings and switch-case for handling various message types
-    printf("type: %s\n",message_type);
+    log_server_message(PATH, LOG_INFO,"Server processing message: %s", buffer);
     MessageType type = get_type(message_type);
     switch (type) {
         case TYPE_IDENTIFY:
             handle_identify(server, sock, buffer);
-            break;
-        case TYPE_RESPONSE:
-            handle_response();
-            break;
-        case TYPE_NEW_USER:
-            handle_new_user();
             break;
         case TYPE_STATUS:
             handle_status();
@@ -129,6 +129,9 @@ void process_message(Server *server, int sock, char *buffer, const char *message
             break;
         case TYPE_DISCONNECT:
             handle_disconnect();
+            break;
+        case TYPE_RESPONSE:
+            handle_response();
             break;
         case TYPE_UNKNOWN:
         default:
@@ -407,8 +410,6 @@ MessageType get_type(const char *message_type) {
         return TYPE_IDENTIFY;
     } else if (strcmp(message_type, "RESPONSE") == 0) {
         return TYPE_RESPONSE;
-    } else if (strcmp(message_type, "NEW_USER") == 0) {
-        return TYPE_NEW_USER;
     } else if (strcmp(message_type, "STATUS") == 0) {
         return TYPE_STATUS;
     } else if (strcmp(message_type, "USERS") == 0) {

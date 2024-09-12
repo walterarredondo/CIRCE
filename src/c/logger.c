@@ -6,23 +6,28 @@
 #include "logger.h"
 #include <unistd.h>
 #include <stdarg.h>
+ #include <libgen.h>
 
 #define MAX_BUFFER_LOG 1024
 
-void log_message(char *buffer, size_t buffer_size , LogLevel level, const char *message, int file_log) {
+void log_message(char *buffer, size_t buffer_size , LogLevel level, const char *message, int log_color, int log_time) {
     const char *formatted_str;
-    formatted_str = format_log(level, message, file_log) ;
+    formatted_str = format_log(level, message, log_color, log_time);
+    strcpy(buffer, formatted_str);
+}
+
+
+const char* format_prompt(LogLevel level, const char *prompt, const char* message) {
+    return "";
+}
+
+const char* format_log(LogLevel level, const char* message, int log_color, int log_time) {
+    const char* level_str;
+    const char* color_code;
+    static char formatted_msg[MAX_BUFFER_LOG];  // Buffer for formatted message
     time_t t = time(NULL);
     struct tm *tm_info = localtime(&t);
     char time_str[26];
-    strftime(time_str, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-    snprintf(buffer, buffer_size, "[%s] %s\n", time_str, formatted_str);
-}
-
-const char* format_log(LogLevel level, const char* message, int file_log) {
-    const char* level_str;
-    const char* color_code;
-    static char formatted_msg[1024];  // Buffer for formatted message
 
     switch (level) {
         case LOG_INFO:
@@ -43,34 +48,43 @@ const char* format_log(LogLevel level, const char* message, int file_log) {
             break;
     }
 
+    strftime(time_str, 26, "%Y-%m-%d %H:%M:%S", tm_info);
 
     // Format the message with the log level and color for fprint or for file log
-    if (!file_log){
-        snprintf(formatted_msg, sizeof(formatted_msg), "%s[%s] %s%s", color_code, level_str, COLOR_RESET, message);
-        return formatted_msg;
+    if (log_color){
+        snprintf(formatted_msg, sizeof(formatted_msg), "[%s][%s] %s\n", time_str, level_str, message);
+    }else{
+        if(log_time){
+            snprintf(formatted_msg, sizeof(formatted_msg), "%s[%s][%s]%s %s\n", color_code, time_str, level_str, COLOR_RESET, message);
+        }else{
+            snprintf(formatted_msg, sizeof(formatted_msg), "%s[%s]%s %s\n", color_code, level_str, COLOR_RESET, message);
+        }
     }
-    snprintf(formatted_msg, sizeof(formatted_msg), "[%s] %s", level_str, message);
     return formatted_msg;
 }
 
 
 // Function to log a message to a file
-void log_file_message(LogLevel level, const char *message) {
+void log_file_message(const char *path, LogLevel level, const char *message) {
     char buffer[MAX_BUFFER_LOG];
     size_t buffer_size = MAX_BUFFER_LOG;
 
-    // Ensure directory exists
-    if (ensure_log_directory("./log") != 0) {
+    char *path_copy = (char *)malloc(strlen(path) + 1);
+    path_copy[sizeof(path_copy)-1] = '\0';
+    char * dir = dirname(path_copy);
+    if (ensure_log_directory(dir) != 0) {
+        free(path_copy);
         return;  // If the directory can't be created, exit the function
     }
+    free(path_copy);
 
     // Open the file in append mode
-    FILE *file = fopen("./log/client_logger", "a");
+    FILE *file = fopen(path, "a");
     if (!file) {
         perror("Error opening log file");
         return;
     }
-    log_message(buffer, buffer_size, level, message, 1);
+    log_message(buffer, buffer_size, level, message, 1, 1);
 
     // Append the message to the file
     fputs(buffer, file);
@@ -80,11 +94,15 @@ void log_file_message(LogLevel level, const char *message) {
 
 void log_print_message(LogLevel level, const char *message) {
     char buffer[MAX_BUFFER_LOG];
-    log_message(buffer, sizeof(buffer), level, message, 0);
+    log_message(buffer, sizeof(buffer), level, message, 1, 1);
     printf(buffer);
 }
 
-int ensure_log_directory(const char *dir) {
+void log_print_prompt(LogLevel level, const char *prompt, const char *message){
+    printf("*%s* %s\n", prompt, message);
+}
+
+int ensure_log_directory(char *dir) {
     // Check if the directory exists using access()
     if (access(dir, F_OK) == 0) {
         // Directory exists
@@ -103,7 +121,7 @@ int ensure_log_directory(const char *dir) {
 
 
 // Function to log a formatted message
-void log_formatted_message(LogLevel level, const char *format, ...) {
+void log_file_formatted_message(const char *path, LogLevel level, const char *format, ...) {
     char log_msg[MAX_BUFFER_LOG];
     va_list args;
     
@@ -117,13 +135,35 @@ void log_formatted_message(LogLevel level, const char *format, ...) {
     va_end(args);
     
     // Call the log_file_message function with the formatted message
-    log_file_message(level, log_msg);
+    log_file_message(path, level, log_msg);
 }
 
 
-//int main() {
-//    // Example usage
-//    const char *json_str = "{\"key\":\"value\"}";
-//    log_formatted_message(LOG_ERROR, "JSON sent to the server:\n%s\n", json_str);
-//    return 0;
-//}
+
+void log_print_file_message(const char *path, LogLevel level, const char *message) {
+    printf(message);
+    log_file_message(path, level, message);
+}
+
+void log_server_message(const char *path, LogLevel level, const char* format, ...){
+    char buffer[MAX_BUFFER_LOG];
+    size_t buffer_size = MAX_BUFFER_LOG;
+    char log_msg[MAX_BUFFER_LOG];
+    va_list args;
+    
+    // Start extracting arguments
+    va_start(args, format);
+    
+    // Format the log message
+    vsnprintf(log_msg, sizeof(log_msg), format, args);
+    
+    // End extracting arguments
+    va_end(args);
+    
+    // Call the log_file_message function with the formatted message
+    log_file_message(path, level, log_msg);
+
+
+    log_message(buffer, buffer_size, level, log_msg, 1, 0);
+    log_print_message(level, log_msg);
+}

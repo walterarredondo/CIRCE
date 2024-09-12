@@ -24,4 +24,7 @@ int build_json_response(char *json_str, size_t json_str_size, const char *fields
 // Function for verifying a json string contain all the given fields in a 1D array 
 int verify_json_fields(const char *json_str, const char *fields[], size_t num_fields);
 
+//function to extract field value
+int json_extract_field_value(const char *json_string, const char *field, char *value_buffer, size_t max_size);
+
 #endif // JSON_UTILS_H

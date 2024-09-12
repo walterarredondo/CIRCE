@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#define DEFAULT_PORT 1333
+#define DEFAULT_PORT 1234
 #define DEFAULT_IP "127.0.0.1"
 #define DEFAULT_QUEUE_SIZE 3
 

@@ -1,6 +1,22 @@
 #ifndef CIRCE_SERVER_H
 #define CIRCE_SERVER_H
 
+typedef enum {
+    TYPE_IDENTIFY = 1,
+    TYPE_STATUS = 2,
+    TYPE_USERS = 3,
+    TYPE_TEXT = 4,
+    TYPE_PUBLIC_TEXT = 5,
+    TYPE_NEW_ROOM = 6,
+    TYPE_INVITE = 7,
+    TYPE_JOIN_ROOM = 8,
+    TYPE_ROOM_USERS = 9,
+    TYPE_ROOM_TEXT = 10,
+    TYPE_LEAVE_ROOM = 11,
+    TYPE_DISCONNECT = 12,
+    TYPE_RESPONSE = 22,
+    TYPE_UNKNOWN = 24
+} MessageType;
 
 typedef struct {
     GHashTable *user_table;  // Hash table to manage users
@@ -20,24 +36,6 @@ typedef struct {
     int socket;
     process_message_func process_message;
 } listener_args_t;
-
-typedef enum {
-    TYPE_IDENTIFY,
-    TYPE_RESPONSE,
-    TYPE_NEW_USER,
-    TYPE_STATUS,
-    TYPE_USERS,
-    TYPE_TEXT,
-    TYPE_PUBLIC_TEXT,
-    TYPE_NEW_ROOM,
-    TYPE_INVITE,
-    TYPE_JOIN_ROOM,
-    TYPE_ROOM_USERS,
-    TYPE_ROOM_TEXT,
-    TYPE_LEAVE_ROOM,
-    TYPE_DISCONNECT,
-    TYPE_UNKNOWN
-} MessageType;
 
 Server *server_init();
 MessageType get_type(const char *message_type);

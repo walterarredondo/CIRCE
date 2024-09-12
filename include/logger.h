@@ -1,4 +1,5 @@
 typedef enum {
+    LOG_USER,
     LOG_INFO,
     LOG_WARNING,
     LOG_ERROR
@@ -15,16 +16,22 @@ typedef enum {
 #define COLOR_WHITE "\033[37m"
 
 
-void log_message(char *buffer, size_t buffer_size , LogLevel level, const char *message, int file_log);
+void log_message(char *buffer, size_t buffer_size , LogLevel level, const char *message, int file_log, int log_time);
 
-const char* format_log(LogLevel level, const char* message, int file_log);
+const char* format_prompt(LogLevel level, const char *prompt, const char* message);
 
-void log_file_message(LogLevel level, const char *message);
+const char* format_log(LogLevel level, const char* message, int log_color, int log_time);
+
+void log_file_message(const char * path, LogLevel level, const char *message);
 
 void log_print_message(LogLevel level, const char *message);
 
-int ensure_log_directory(const char *dir);
+int ensure_log_directory(char *dir);
 
+void log_print_prompt(LogLevel level, const char *prompt, const char *message);
 
-void log_formatted_message(LogLevel log_level, const char *format, ...);
+void log_server_message(const char *path, LogLevel level, const char* format, ...);
+
+void log_print_file_message(const char *path, LogLevel level, const char *message);
+void log_file_formatted_message(const char *path, LogLevel log_level, const char *format, ...);
 char* string_printf(const char *format, ...);

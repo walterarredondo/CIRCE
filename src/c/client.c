@@ -12,12 +12,19 @@
 #include "json_utils.h"
 #include "connection.h"
 #include "logger.h"
-#define PORT 1234
-#define LOCALHOST "127.0.0.1"
-#define MAX_BUFFER 8192
+#define MAX_BUFFER 2048
 #define MAX_BUFFER_LOG 1024
 #define TYPE_MAX_LENGHT 32
+#define VALUE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
+#define FIELD_OPERATION "operation"
+#define FIELD_RESULT "result"
+#define FIELD_EXTRA "extra"
+#define VALUE_IDENTIFY "IDENTIFY"
+#define RESULT_SUCCESS "SUCCESS"
+#define RESULT_USER_ALREADY_EXISTS "USER_ALREADY_EXISTS"
+
+static const char* PATH = "./log/client_logger";
 
 volatile sig_atomic_t stop = 0;
 
@@ -29,7 +36,7 @@ int main(int argc, char const* argv[]) {
     char command[16];
     char msg[MAX_BUFFER];
     bool running = true;
-    
+    setbuf(stdout, NULL); 
     sock = create_socket();
     set_socket_options(sock,&config);
     setup_server_address(&config, &address);
@@ -47,7 +54,7 @@ int main(int argc, char const* argv[]) {
                     execute_command(sock, command, msg);
                 }
             } else {
-                log_file_message(LOG_ERROR,"Invalid input. Commands should start with '\\'.");
+                log_print_file_message(PATH, LOG_ERROR,"Invalid input. Commands should start with '\\'.");
             }
         } 
     }
@@ -68,15 +75,21 @@ void *listener(void *arg){
     char msg_type[TYPE_MAX_LENGHT];
 
     while (valread != 0){
-        memset(buffer, 0, sizeof(buffer)); 
-        memset(msg_type, 0, sizeof(msg_type)); 
         valread = read(sock, buffer, MAX_BUFFER);
         if(valread <= 0){
             continue;
         }
-        log_formatted_message(LOG_INFO,"received json: %s",buffer);
+
+        // Ensure null-termination after the last character read
+        if (valread < MAX_BUFFER) {
+            buffer[valread] = '\0';  // Set the last character to null terminator
+        } else {
+            buffer[MAX_BUFFER - 1] = '\0';  // Safeguard if buffer is filled
+        }
+
+        log_file_formatted_message(PATH, LOG_INFO,"received json: %s",buffer);
         if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
-            log_file_message(LOG_ERROR,"not a valid json: field 'type' missing");
+            log_file_message(PATH, LOG_ERROR,"not a valid json: field 'type' missing");
             continue;
         }
        process_message(client, sock, buffer, msg_type);
@@ -124,9 +137,52 @@ void handle_login(int sock, const char *username){
     identify_client(sock, username);
 }
 
-void process_message(Client *client, int socket, char *buffer, const char *msg_type){
+
+//void handle_unknown(Client *client, int socket, char *buffer);
+
+void process_message(Client *client, int socket, char *buffer, const char *msg_type) {
     // Client-specific message processing
-    log_formatted_message(LOG_INFO,"Client processing message: %s", buffer);
+    log_file_formatted_message(PATH, LOG_INFO,"Client processing message: %s", buffer);
+    MessageType type = get_type(msg_type);
+    switch (type) {
+        case TYPE_NEW_USER:
+            handle_new_user(client, socket, buffer);
+            break;
+        case TYPE_NEW_STATUS:
+            handle_new_status(client, socket, buffer);
+            break;
+        case TYPE_USER_LIST:
+            handle_user_list(client, socket, buffer);
+            break;
+        case TYPE_TEXT_FROM:
+            handle_text_from(client, socket, buffer);
+            break;
+        case TYPE_PUBLIC_TEXT_FROM:
+            handle_public_text_from(client, socket, buffer);
+            break;
+        case TYPE_JOINED_ROOM:
+            handle_joined_room(client, socket, buffer);
+            break;
+        case TYPE_ROOM_USER_LIST:
+            handle_room_user_list(client, socket, buffer);
+            break;
+        case TYPE_ROOM_TEXT_FROM:
+            handle_room_text_from(client, socket, buffer);
+            break;
+        case TYPE_LEFT_ROOM:
+            handle_left_room(client, socket, buffer);
+            break;
+        case TYPE_DISCONNECTED:
+            handle_disconnected(client, socket, buffer);
+            break;
+        case TYPE_RESPONSE:
+            handle_response(client, socket, buffer);
+            break;
+        case TYPE_UNKNOWN:
+        default:
+            //handle_unknown(client, socket, buffer);
+            break;
+    }
 }
 
 
@@ -153,9 +209,9 @@ int identify_client(int sock, const char *user){
 
     if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
         send(sock, json_str, strlen(json_str), 0);
-        log_formatted_message(LOG_INFO, "JSON sent to the server: %s", json_str);
+        log_file_formatted_message(PATH, LOG_INFO, "JSON sent to the server: %s", json_str);
     } else {
-        log_file_message(LOG_ERROR,"Failed to build JSON ID.");
+        log_file_message(PATH, LOG_ERROR,"Failed to build JSON ID.");
         return 0;
     }
     return 1;
@@ -209,12 +265,81 @@ enum Command get_command_type(const char* command) {
     } else if (strcmp(command, "\\login") == 0) {
         return CMD_LOGIN;
     } else {
+        log_print_prompt(LOG_USER, "Command not found", "");
         return CMD_UNKNOWN;
     }
 }
 
 void handle_sigint(int sig){
     //implement a way to close each socket, and close each thread
-    log_file_message(LOG_INFO,"Leaving... Goodbye!");
+    const char *goodbye = "\nLeaving... Goodbye!";
+    log_print_file_message(PATH,LOG_INFO,goodbye);
     stop = 1;
 }
+
+
+
+
+void handle_new_user(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for new user
+}
+
+void handle_new_status(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for new status
+}
+
+void handle_user_list(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for user list
+}
+
+void handle_text_from(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for text from user
+}
+
+void handle_public_text_from(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for public text from user
+}
+
+void handle_joined_room(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for joined room
+}
+
+void handle_room_user_list(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for room user list
+}
+
+void handle_room_text_from(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for room text from user
+}
+
+void handle_left_room(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for left room
+}
+
+void handle_disconnected(Client *client, int socket, char *buffer) {
+    // TODO: Implement handling for disconnection
+}
+
+void handle_response(Client *client, int socket, char *json_str) {
+    char operation[VALUE_MAX_LENGHT] = { 0 };
+    json_extract_field_value(json_str, FIELD_OPERATION, operation, VALUE_MAX_LENGHT);
+    if(strcmp(operation, VALUE_IDENTIFY) != 0){
+        //printf("\noperation: %s\n", operation);
+        //printf("length operation: %li \tlength VALUE_IDENTIFY: %li", strlen(operation), strlen(VALUE_IDENTIFY));
+        log_file_formatted_message(PATH, LOG_ERROR,"wrong response. Received: ", json_str);
+    }
+
+    char value[VALUE_MAX_LENGHT] = { 0 };
+    json_extract_field_value(json_str, FIELD_RESULT,value, VALUE_MAX_LENGHT);
+    if(strcmp(value, RESULT_SUCCESS) == 0){
+        char extra[VALUE_MAX_LENGHT];
+        json_extract_field_value(json_str, FIELD_EXTRA,extra, VALUE_MAX_LENGHT);
+        log_print_prompt(LOG_USER,"Logged in as:", extra);
+    }else if(strcmp(value, RESULT_USER_ALREADY_EXISTS) == 0){
+        log_file_formatted_message(PATH, LOG_ERROR,"Identification failed. Received: %s", json_str);
+        log_print_prompt(LOG_USER,"User already taken. Choose another one and log in","");
+    }
+
+}
+
+
