@@ -8,6 +8,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <signal.h>
+#include <ctype.h>
+#include <glib.h> 
 #include "client.h"
 #include "json_utils.h"
 #include "connection.h"
@@ -42,20 +44,26 @@ int main(int argc, char const* argv[]) {
     setup_server_address(&config, &address);
     signal(SIGINT, handle_sigint);
     if (connect_to_server(sock, &address) && create_listener(sock)){
+        printf(">");
         while (running && !stop) {
             if (!get_input(buffer)) {
                 continue;
             }
-
+            g_strstrip(buffer); 
+            int count;
             if (parse_command(buffer, command, msg)) {
                 if (is_leave_command(command)) {
                     running = false;
                 } else {
-                    execute_command(sock, command, msg);
+                    count = count_tokens(msg, " ");
+                    execute_command(sock, command, msg, count);
                 }
             } else {
                 log_print_file_message(PATH, LOG_ERROR,"Invalid input. Commands should start with '\\'.");
             }
+            buffer[0] = '\0';
+            command[0] = '\0';
+            msg[0] = '\0';
         } 
     }
     close(sock);
@@ -113,7 +121,7 @@ int create_listener(int sock){
 
 
 // Execute the parsed command and pass the arguments
-void execute_command(int sock, const char *command, const char *args) {
+void execute_command(int sock, const char *command, const char *args, int n_params) {
     switch (get_command_type(command)) {
         case CMD_HELP:
             handle_help(args);
@@ -122,7 +130,12 @@ void execute_command(int sock, const char *command, const char *args) {
             handle_echo(args);
             break;
         case CMD_LOGIN:
-            handle_login(sock, args);
+            if(n_params == 1 && strlen(args) > 2 && strlen(args) < 9){
+                handle_login(sock, args);
+            } else {
+                log_print_prompt(LOG_USER,"Username has to be between 3 and 8 characters long");
+                log_file_message(PATH, LOG_ERROR, "Invalid username");
+            }
             break;
         default:
             handle_unknown(command);
@@ -205,6 +218,7 @@ int identify_client(int sock, const char *user){
         {"username", user}
     };
 
+
     size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
 
     if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
@@ -232,6 +246,27 @@ bool parse_command(const char *buffer, char *command, char *args) {
     return false;
 }
 
+int count_tokens(const char *str, const char *delim) {
+    char *token;
+    char str_copy[256];  // Ensure the string is long enough for the copy
+    int count = 0;
+
+    // Copy the string, since strtok modifies the original string
+    strncpy(str_copy, str, sizeof(str_copy));
+    str_copy[sizeof(str_copy) - 1] = '\0';  // Make sure it's null-terminated
+
+    // Get the first token
+    token = strtok(str_copy, delim);
+
+    // Walk through other tokens
+    while (token != NULL) {
+        count++;
+        token = strtok(NULL, delim);
+    }
+
+    return count;
+}
+
 // Check if the command is '\leave'
 bool is_leave_command(const char *command) {
     return strcmp(command, "\\leave") == 0;
@@ -253,7 +288,6 @@ void handle_echo(const char *args) {
 
 // Handle unknown commands
 void handle_unknown(const char *command) {
-    printf("Unknown command: %s\n", command);
 }
 
 enum Command get_command_type(const char* command) {
@@ -264,7 +298,7 @@ enum Command get_command_type(const char* command) {
     } else if (strcmp(command, "\\login") == 0) {
         return CMD_LOGIN;
     } else {
-        log_print_prompt(LOG_USER, "Command not found", "");
+        log_print_prompt(LOG_USER, "Command not found");
         return CMD_UNKNOWN;
     }
 }

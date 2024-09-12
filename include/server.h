@@ -50,7 +50,7 @@ void server_remove_user(Server *server, const char *username);
 
 char* Server_acceptClient();
 
-int identify_user(int sock, char* buffer, char * id, size_t max_size);
+int parse_user(int sock, char* buffer, char * id, size_t max_size);
 
 
 void *listener(void *arg);

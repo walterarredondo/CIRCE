@@ -1,5 +1,6 @@
 typedef enum {
     LOG_USER,
+    LOG_SUCCESS,
     LOG_INFO,
     LOG_WARNING,
     LOG_ERROR
@@ -28,7 +29,7 @@ void log_print_message(LogLevel level, const char *message);
 
 int ensure_log_directory(char *dir);
 
-void log_print_prompt(LogLevel level, const char *prompt, const char *message);
+void log_print_prompt(LogLevel level, const char *prompt, ...);
 
 void log_server_message(const char *path, LogLevel level, const char* format, ...);
 

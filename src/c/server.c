@@ -17,8 +17,7 @@
 #define TYPE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 
-
-static const char* PATH = "./log/client_logger";
+static const char* PATH = "./log/server_logger";
 
 // Flag to indicate if Ctrl+C (SIGINT) was caught
 static volatile sig_atomic_t stop = 0;
@@ -28,6 +27,7 @@ int main(int argc, char const* argv[]) {
     struct sockaddr_in address; 
     Server *server = server_init(); 
     GList *thread_list = NULL;
+    setbuf(stdout, NULL); 
 
 
     struct server_config config = initialize_config();
@@ -40,7 +40,7 @@ int main(int argc, char const* argv[]) {
         new_socket = accept_connection(server_fd, &address);
         thread_list = create_listener_thread(server, new_socket, thread_list);
     }
-    printf("quitting gracefully. goodbye!");
+    log_server_message(PATH, LOG_INFO,"quitting gracefully. goodbye!");
     g_list_free_full(thread_list, free); 
     close(server_fd);
     return EXIT_SUCCESS;
@@ -53,7 +53,7 @@ void *listener(void *arg){
     Server *server = args->server;
 
     if (server->user_table == NULL) {
-        fprintf(stderr, "Error: user_table is NULL\n");
+        log_server_message(PATH, LOG_ERROR, "Error while creating user_table");
         return NULL;
     }
 
@@ -77,9 +77,9 @@ void *listener(void *arg){
         } else {
             buffer[MAX_BUFFER - 1] = '\0';  // Safeguard if buffer is filled
         }
-        printf("received: %s\n",buffer);
+        log_server_message(PATH, LOG_INFO,"received: %s",buffer);
         if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
-            printf("not a valid json: field 'type' missing\n");
+            log_server_message(PATH, LOG_ERROR, "not a valid json: field 'type' missing");
             continue;
         }
        process_message(server, sock, buffer, msg_type);
@@ -135,7 +135,7 @@ void process_message(Server *server, int sock, char *buffer, const char *message
             break;
         case TYPE_UNKNOWN:
         default:
-            printf("Unknown message type: %s\n", message_type);
+            log_server_message(PATH, LOG_INFO, "Unknown message type: %s", message_type);
             break;
     }
 }
@@ -144,33 +144,31 @@ void process_message(Server *server, int sock, char *buffer, const char *message
 
 void handle_identify(Server *server, int sock, char* buffer){
     char username[USER_MAX_LENGHT];  
-    printf("Handling IDENTIFY\n");
-    if(!identify_user(sock, buffer, username, USER_MAX_LENGHT)){
-        char* failed_id = "Idetification failed\n";
+    if(!parse_user(sock, buffer, username, USER_MAX_LENGHT)){
+        log_server_message(PATH, LOG_ERROR, "Idetification failed");
         close(sock);
         return;
     }
-    printf("username is: %s\n",username);
     UserInfo *found_user = g_hash_table_lookup(server->user_table, username);
     if (found_user) {
         if(!identify_response_failed(sock,username)){
-            printf("failed sending the failed identification response\n");
+            log_server_message(PATH, LOG_ERROR, "failed sending the failed identification response.");
         }
-        printf("\nUser already exists, choose another one %s\n", found_user->username);
+        log_server_message(PATH, LOG_ERROR, "User already exists, choose another one %s", found_user->username);
     } else {
         server_add_user(server, username,"ONLINE",sock);
         if(!identify_response_success(sock,username)){
-            printf("Response to identification failed\n");
+            log_server_message(PATH, LOG_ERROR,"Response to identification failed");
         }
-        printf("\nUser %s added to the server user list.\n", username);
+        log_server_message(PATH, LOG_SUCCESS,"User '%s' added to the server user list.", username);
         send_json_except_user(server,username);
-        printf("All responses to clients were sent.\n");
+        log_server_message(PATH, LOG_SUCCESS,"All responses to clients were sent.");
     }
 
 }
 
 void handle_response() {
-    printf("Handling RESPONSE\n");
+    //printf("Handling RESPONSE\n");
     //send(new_socket, buffer, strlen(buffer), 0);
     //printf("echo message sent\n");
 }
@@ -224,22 +222,23 @@ void handle_disconnect() {
 }
 
 
-int identify_user(int sock, char* json_str, char * username, size_t max_size){
+int parse_user(int sock, char* json_str, char * username, size_t max_size){
     const char *required_fields[] = {"type", "username"};
     size_t fields_len = sizeof(required_fields) /  sizeof(required_fields[0]); 
     if(!verify_json_fields(json_str,required_fields,fields_len)){
-        printf("missing fields\n");
+        log_server_message(PATH, LOG_ERROR,"Missing fields");
     }
 
     char user[USER_MAX_LENGHT]; 
     const char *tag = "username";
-    if(!json_string_field_size(json_str,tag,user, max_size)){
-        printf("invalid size of field\n");
+    if(!json_extract_field_value(json_str, tag, user, USER_MAX_LENGHT) || strlen(user)==0 )
+    {
+        log_server_message(PATH, LOG_ERROR, "Invalid username lenght");
         return 0;
     }
     strncpy(username, user, USER_MAX_LENGHT - 1);
     username[USER_MAX_LENGHT-1] = '\0'; // Ensure null-termination
-    printf("client identified succesfully\n");
+    log_server_message(PATH, LOG_SUCCESS,"Client identified succesfully");
     return 1;
 }
 
@@ -286,7 +285,7 @@ void send_json_except_user(Server *server, const char *exclude_username) {
             continue;
         }
         if (!send_json_response(user->socket, json_str, sizeof(json_str), fields_and_values,num_fields)) {
-            printf("Failed to send JSON response to user: %s\n", user->username);
+            log_server_message(PATH, LOG_ERROR,"Failed to send JSON response to user: %s", user->username);
         }
     }
 }
@@ -301,10 +300,10 @@ int send_json_response(int sock, char *json_str, size_t json_str_size ,const cha
     if (build_json_response(json_str, json_str_size, fields_and_values, num_fields)) {
         // Send JSON response to the client
         send(sock, json_str, strlen(json_str), 0);
-        printf("JSON sent to the client:\n%s\n", json_str);
+        log_server_message(PATH, LOG_SUCCESS,"JSON sent to the client:%s", json_str);
         return 1; // Success
     } else {
-        printf("Failed to build JSON response.\n");
+        log_server_message(PATH, LOG_ERROR,"Failed to build JSON response.");
         return 0; // Failure
     }
 }
@@ -322,7 +321,7 @@ Server* server_init() {
     server->user_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, free_user);
     if (server->user_table == NULL) {
         // Handle hash table creation failure
-        printf("error null user_table");
+        log_server_message(PATH, LOG_ERROR,"error null user_table");
         free(server);
         return NULL;
     }
@@ -367,7 +366,7 @@ void server_remove_user(Server *server, const char *username) {
 static void handle_sigint(int _){
     (void)_;
     //implement a way to close each socket, and close each thread
-    printf("\ngoodbye...\n");
+    log_server_message(PATH, LOG_INFO,"\ngoodbye...\n");
     stop = 1;
     kill(-getpgrp(), SIGQUIT); 
 }

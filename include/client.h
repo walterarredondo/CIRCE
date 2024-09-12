@@ -73,7 +73,7 @@ bool parse_command(const char *buffer, char *command, char *args);
 // Check if the command is '\leave'
 bool is_leave_command(const char *command);
 // Execute the parsed command and pass the arguments
-void execute_command(int sock, const char *command, const char *args);
+void execute_command(int sock, const char *command, const char *args, int n_params);
 // Handle the '\help' command
 void handle_help(const char *args);
 // Handle the '\echo' command
@@ -122,3 +122,8 @@ void handle_join_room_response(Client *client, int socket, char *json_str);
 void handle_invite_response(Client *client, int socket, char *json_str);
 void handle_text_response(Client *client, int socket, char *json_str);
 void handle_unknown_operation_response(Client *client, int socket, char *json_str);
+
+
+
+
+int count_tokens(const char *str, const char *delim);

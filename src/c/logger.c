@@ -9,6 +9,7 @@
  #include <libgen.h>
 
 #define MAX_BUFFER_LOG 1024
+#define MAX_BUFFER_PROMPT 256
 
 void log_message(char *buffer, size_t buffer_size , LogLevel level, const char *message, int log_color, int log_time) {
     const char *formatted_str;
@@ -30,6 +31,10 @@ const char* format_log(LogLevel level, const char* message, int log_color, int l
     char time_str[26];
 
     switch (level) {
+        case LOG_SUCCESS:
+            level_str = "SUCCESS";
+            color_code = COLOR_GREEN;  // Blue
+            break;
         case LOG_INFO:
             level_str = "INFO";
             color_code = COLOR_BLUE;  // Blue
@@ -52,13 +57,13 @@ const char* format_log(LogLevel level, const char* message, int log_color, int l
 
     // Format the message with the log level and color for fprint or for file log
     if (log_color){
-        snprintf(formatted_msg, sizeof(formatted_msg), "[%s][%s] %s\n", time_str, level_str, message);
-    }else{
         if(log_time){
             snprintf(formatted_msg, sizeof(formatted_msg), "%s[%s][%s]%s %s\n", color_code, time_str, level_str, COLOR_RESET, message);
         }else{
             snprintf(formatted_msg, sizeof(formatted_msg), "%s[%s]%s %s\n", color_code, level_str, COLOR_RESET, message);
         }
+    }else{
+        snprintf(formatted_msg, sizeof(formatted_msg), "[%s][%s] %s\n", time_str, level_str, message);
     }
     return formatted_msg;
 }
@@ -70,13 +75,13 @@ void log_file_message(const char *path, LogLevel level, const char *message) {
     size_t buffer_size = MAX_BUFFER_LOG;
 
     char *path_copy = (char *)malloc(strlen(path) + 1);
-    path_copy[sizeof(path_copy)-1] = '\0';
+    strcpy(path_copy, path);
+    path_copy[strlen(path)] = '\0';
     char * dir = dirname(path_copy);
-    if (ensure_log_directory(dir) != 0) {
+    if (!ensure_log_directory(dir) != 0) {
         free(path_copy);
         return;  // If the directory can't be created, exit the function
     }
-    free(path_copy);
 
     // Open the file in append mode
     FILE *file = fopen(path, "a");
@@ -84,9 +89,10 @@ void log_file_message(const char *path, LogLevel level, const char *message) {
         perror("Error opening log file");
         return;
     }
-    log_message(buffer, buffer_size, level, message, 1, 1);
+    log_message(buffer, buffer_size, level, message, 0, 1);
 
     // Append the message to the file
+    free(path_copy);
     fputs(buffer, file);
     fclose(file);
 }
@@ -98,8 +104,14 @@ void log_print_message(LogLevel level, const char *message) {
     printf(buffer);
 }
 
-void log_print_prompt(LogLevel level, const char *prompt, const char *message){
-    printf("*%s* %s\n>", prompt, message);
+void log_print_prompt(LogLevel level, const char *format, ...){
+    char prompt[MAX_BUFFER_PROMPT];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(prompt, sizeof(prompt), format, args);
+    va_end(args);
+
+    printf("*%s*\n>", prompt);
 }
 
 int ensure_log_directory(char *dir) {
@@ -110,11 +122,11 @@ int ensure_log_directory(char *dir) {
         // Check if the path is a directory
         if (S_ISDIR(statbuf.st_mode)) {
             // Path is a directory
-            return 0;
+            return 1;
         } else {
             // Path exists but is not a directory
             fprintf(stderr, "Path exists but is not a directory: %s\n", dir);
-            return -1;
+            return 0;
         }
     }
 
@@ -122,10 +134,10 @@ int ensure_log_directory(char *dir) {
     if (mkdir(dir, 0755) != 0) {
         // Failed to create the directory
         perror("mkdir");
-        return -1;
+        return 0;
     }
 
-    return 0;
+    return 1;
 }
 
 
@@ -150,7 +162,7 @@ void log_file_formatted_message(const char *path, LogLevel level, const char *fo
 
 
 void log_print_file_message(const char *path, LogLevel level, const char *message) {
-    printf(message);
+    printf("%s\n",message);
     log_file_message(path, level, message);
 }
 
@@ -158,21 +170,16 @@ void log_server_message(const char *path, LogLevel level, const char* format, ..
     char buffer[MAX_BUFFER_LOG];
     size_t buffer_size = MAX_BUFFER_LOG;
     char log_msg[MAX_BUFFER_LOG];
+ 
     va_list args;
-    
-    // Start extracting arguments
     va_start(args, format);
-    
-    // Format the log message
     vsnprintf(log_msg, sizeof(log_msg), format, args);
-    
-    // End extracting arguments
     va_end(args);
     
-    // Call the log_file_message function with the formatted message
+    // Write in the log file 
     log_file_message(path, level, log_msg);
 
-
+    //print in the console the formatted message
     log_message(buffer, buffer_size, level, log_msg, 1, 0);
     log_print_message(level, log_msg);
 }
