@@ -99,17 +99,26 @@ void log_print_message(LogLevel level, const char *message) {
 }
 
 void log_print_prompt(LogLevel level, const char *prompt, const char *message){
-    printf("*%s* %s\n", prompt, message);
+    printf("*%s* %s\n>", prompt, message);
 }
 
 int ensure_log_directory(char *dir) {
-    // Check if the directory exists using access()
-    if (access(dir, F_OK) == 0) {
-        // Directory exists
-        return 0;
+    struct stat statbuf;
+
+    // Check if the path exists
+    if (stat(dir, &statbuf) == 0) {
+        // Check if the path is a directory
+        if (S_ISDIR(statbuf.st_mode)) {
+            // Path is a directory
+            return 0;
+        } else {
+            // Path exists but is not a directory
+            fprintf(stderr, "Path exists but is not a directory: %s\n", dir);
+            return -1;
+        }
     }
 
-    // Directory doesn't exist, try to create it with mkdir()
+    // Path doesn't exist, try to create it with mkdir()
     if (mkdir(dir, 0755) != 0) {
         // Failed to create the directory
         perror("mkdir");

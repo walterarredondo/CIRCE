@@ -221,7 +221,6 @@ int identify_client(int sock, const char *user){
 
 // Get input from the user
 bool get_input(char *buffer) {
-    printf("> ");
     return fgets(buffer, MAX_BUFFER, stdin) != NULL;
 }
 
@@ -323,18 +322,34 @@ void handle_disconnected(Client *client, int socket, char *buffer) {
 void handle_response(Client *client, int socket, char *json_str) {
     char operation[VALUE_MAX_LENGHT] = { 0 };
     json_extract_field_value(json_str, FIELD_OPERATION, operation, VALUE_MAX_LENGHT);
-    if(strcmp(operation, VALUE_IDENTIFY) != 0){
-        //printf("\noperation: %s\n", operation);
-        //printf("length operation: %li \tlength VALUE_IDENTIFY: %li", strlen(operation), strlen(VALUE_IDENTIFY));
-        log_file_formatted_message(PATH, LOG_ERROR,"wrong response. Received: ", json_str);
-    }
 
+    if (strcmp(operation, "IDENTIFY") == 0) {
+        handle_identify_response(client, socket, json_str);
+    } else if (strcmp(operation, "LEAVE_ROOM") == 0) {
+        handle_leave_room_response(client, socket, json_str);
+    } else if (strcmp(operation, "ROOM_TEXT") == 0) {
+        handle_room_text_response(client, socket, json_str);
+    } else if (strcmp(operation, "ROOM_USERS") == 0) {
+        handle_room_users_response(client, socket, json_str);
+    } else if (strcmp(operation, "JOIN_ROOM") == 0) {
+        handle_join_room_response(client, socket, json_str);
+    } else if (strcmp(operation, "INVITE") == 0) {
+        handle_invite_response(client, socket, json_str);
+    } else if (strcmp(operation, "TEXT") == 0) {
+        handle_text_response(client, socket, json_str);
+    } else {
+        handle_unknown_operation_response(client, socket, json_str);
+        log_file_formatted_message(PATH, LOG_ERROR,"wrong response. Received: ", json_str);
+    } 
+}
+
+void handle_identify_response(Client *client, int socket, char *json_str) {
     char value[VALUE_MAX_LENGHT] = { 0 };
     json_extract_field_value(json_str, FIELD_RESULT,value, VALUE_MAX_LENGHT);
     if(strcmp(value, RESULT_SUCCESS) == 0){
         char extra[VALUE_MAX_LENGHT];
         json_extract_field_value(json_str, FIELD_EXTRA,extra, VALUE_MAX_LENGHT);
-        log_print_prompt(LOG_USER,"Logged in as:", extra);
+        log_print_prompt(LOG_USER,"Welcome, %s!", extra);
     }else if(strcmp(value, RESULT_USER_ALREADY_EXISTS) == 0){
         log_file_formatted_message(PATH, LOG_ERROR,"Identification failed. Received: %s", json_str);
         log_print_prompt(LOG_USER,"User already taken. Choose another one and log in","");
@@ -343,3 +358,30 @@ void handle_response(Client *client, int socket, char *json_str) {
 }
 
 
+void handle_leave_room_response(Client *client, int socket, char *json_str){
+
+}
+void handle_room_text_response(Client *client, int socket, char *json_str)
+{
+
+}
+void handle_room_users_response(Client *client, int socket, char *json_str)
+{
+
+}
+void handle_join_room_response(Client *client, int socket, char *json_str)
+{
+
+}
+void handle_invite_response(Client *client, int socket, char *json_str)
+{
+
+}
+void handle_text_response(Client *client, int socket, char *json_str)
+{
+
+}
+void handle_unknown_operation_response(Client *client, int socket, char *json_str)
+{
+
+}

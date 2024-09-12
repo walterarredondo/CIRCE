@@ -111,3 +111,14 @@ MessageType get_type(const char *message_type) {
         return TYPE_UNKNOWN;
     }
 }
+
+
+void handle_response(Client *client, int socket, char *json_str);
+void handle_identify_response(Client *client, int socket, char *json_str);
+void handle_leave_room_response(Client *client, int socket, char *json_str);
+void handle_room_text_response(Client *client, int socket, char *json_str);
+void handle_room_users_response(Client *client, int socket, char *json_str);
+void handle_join_room_response(Client *client, int socket, char *json_str);
+void handle_invite_response(Client *client, int socket, char *json_str);
+void handle_text_response(Client *client, int socket, char *json_str);
+void handle_unknown_operation_response(Client *client, int socket, char *json_str);
