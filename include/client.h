@@ -60,6 +60,7 @@ void *client_listener(void *arg);
 
 //functions in the client
 int identify_client(int sock, const char* user);
+int de_identify_client(Client *client);
 void ask_for_username(char *username, int max_len);
 void login_client(Client *client, bool logged, Status status, const char *user);
 void update_client(Client *client, bool logged, Status status);
@@ -112,6 +113,8 @@ void handle_help(const char *args);
 void handle_echo(const char *args);
 // Handle login command
 void handle_login(Client *client, const char *command, int n_params);
+// logout client command
+void handle_logout(Client *client);
 // Handle unknown commands
 void handle_unknown(const char *command);
 

@@ -77,7 +77,7 @@ int main(int argc, char const* argv[]) {
             msg[0] = '\0';
         } 
     }
-    close(sock);
+    handle_disconnected(client);
     return 0;
 }
 
@@ -131,7 +131,7 @@ void execute_command(Client *client, const char *command, const char *args, int 
             handle_login(client, args, n_params);
             break;
         case CMD_LOGOUT:
-            handle_disconnected(client);
+            handle_logout(client);
             break;
         default:
             handle_unknown(command);
@@ -164,6 +164,18 @@ void handle_login(Client *client, const char *username, int n_params){
     } else {
         log_print_prompt(LOG_USER,"Username has to be between 3 and 8 characters long");
         log_file_message(PATH, LOG_ERROR, "Invalid username");
+    }
+}
+
+void handle_logout(Client *client){
+    bool logged = client->logged_in;
+    if(!logged){
+        log_print_prompt(LOG_USER,"You're already logged out. Log out first.");
+        return;
+    }
+    if(de_identify_client(client)){
+        log_print_prompt(LOG_USER,"You're logged out");
+        login_client(client,false,ONLINE,"");
     }
 }
 
@@ -244,6 +256,24 @@ int identify_client(int sock, const char *user){
 }
 
 
+int de_identify_client(Client *client){
+    int sock = client->socket;
+    char json_str[256] = "";  // Start with an empty JSON string
+    const char *fields_and_values[][2] = {
+        {"type", "DISCONNECT"},
+    };
+
+    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+
+    if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
+        send(sock, json_str, strlen(json_str), 0);
+        log_file_formatted_message(PATH, LOG_INFO, "JSON sent to the server: %s", json_str);
+    } else {
+        log_file_message(PATH, LOG_ERROR,"Failed to build JSON ID.");
+        return 0;
+    }
+    return 1;
+}
 
 // Get input from the user
 bool get_input(char *buffer) {
@@ -341,11 +371,8 @@ void handle_left_room(Client *client,  char *buffer) {
 }
 
 void handle_disconnected(Client *client) {
-    bool logged = client->logged_in;
-    if(!logged){
-        log_print_prompt(LOG_USER,"You're already logged out. Log out first.");
-    }
-    //send disconnect notification
+    
+    //receive disconnect notification
 }
 
 void handle_client_response(Client *client,  char *json_str) {
@@ -421,7 +448,6 @@ void handle_unknown_operation_response(Client *client,  char *json_str)
 void login_client(Client *client, bool logged, Status status, const char *user) {
     update_client(client, logged, status);
     snprintf(client->username, sizeof(client->username), "%s", user);
-    // Use snprintf instead of strncpy to avoid truncation issues
 }
 void update_client(Client *client, bool logged, Status status) {
     client->logged_in = logged;  // true
@@ -463,6 +489,8 @@ enum Command get_command_type(const char* command) {
         return CMD_ECHO;
     } else if (strcmp(command, "\\login") == 0) {
         return CMD_LOGIN;
+    } else if (strcmp(command, "\\logout") == 0) {
+        return CMD_LOGOUT;
     } else {
         log_print_prompt(LOG_USER, "Command not found");
         return CMD_UNKNOWN;
