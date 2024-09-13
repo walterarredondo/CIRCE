@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "client.h"
 
 #define DEFAULT_PORT 1234
 #define DEFAULT_IP "127.0.0.1"
@@ -48,4 +49,7 @@ int accept_connection(int server_fd, struct sockaddr_in *address);
 // Function to connect to the server
 int connect_to_server(int server_fd, struct sockaddr_in *server_addr);
 int setup_server_address(struct server_config *config, struct sockaddr_in *address);
+
+
+int client_create_listener(Client *client, client_process_message_func process_message, client_listener_args_t *args, void *(*listener)(void *));
 #endif // SERVER_UTILS_H

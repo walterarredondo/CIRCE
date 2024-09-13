@@ -35,27 +35,19 @@ typedef struct {
     Server *server;
     int socket;
     process_message_func process_message;
-} listener_args_t;
+} server_listener_args_t;
 
-Server *server_init();
-MessageType get_type(const char *message_type);
-GList *create_listener_thread(Server *server, int new_socket, GList *thread_list);
+
+//listener
+void *server_listener(void *arg);
+GList *create_thread_pool(Server *server, int new_socket, GList *thread_list);
+
+//manage exit
 static void handle_sigint(int _);
-void server_cleanup(Server *server);
-UserInfo* create_user(const char *username, const char *status, int socket);
-void free_user(gpointer data);
-void server_add_user(Server *server, const char *username, const char *status, int socket);
-void server_remove_user(Server *server, const char *username);
 
 
-char* Server_acceptClient();
-
-int parse_user(int sock, char* buffer, char * id, size_t max_size);
-
-
-void *listener(void *arg);
-
-
+//handle requests
+MessageType server_get_type(const char *message_type);
 void process_message(Server *server, int, char *, const char *);
 void handle_identify();
 void handle_response();
@@ -73,10 +65,28 @@ void handle_leave_room();
 void handle_disconnect();
 
 
-
-int send_json_response(int sock, char *json_str, size_t size_json_str, const char *fields_and_values[][2], size_t num_fields);
+//server response 
 int identify_response_success(int sock, char *user);
 int identify_response_failed(int sock, char *user);
+
+
+//server operations
+int parse_user(int sock, char* buffer, char * id, size_t max_size);
+int send_json_response(int sock, char *json_str, size_t size_json_str, const char *fields_and_values[][2], size_t num_fields);
 void send_json_except_user(Server *server, const char *exclude_username);
+void server_cleanup(Server *server);
+void server_add_user(Server *server, const char *username, const char *status, int socket);
+void server_remove_user(Server *server, const char *username);
+char* Server_acceptClient();
+
+
+//manage data
+Server *server_init();
+UserInfo* create_user(const char *username, const char *status, int socket);
+void free_user(gpointer data);
+
+
+
+
 
 #endif //CIRCE_SERVER_H

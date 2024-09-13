@@ -43,23 +43,34 @@ int main(int argc, char const* argv[]) {
     set_socket_options(sock,&config);
     setup_server_address(&config, &address);
     signal(SIGINT, handle_sigint);
-    if (connect_to_server(sock, &address) && create_listener(sock)){
+    Client *client = client_init(sock);;
+    client_listener_args_t args;
+    if (connect_to_server(sock, &address) && client_create_listener(client, &client_process_message, &args, &client_listener)){
         printf(">");
         while (running && !stop) {
             if (!get_input(buffer)) {
                 continue;
             }
             g_strstrip(buffer); 
-            int count;
             if (parse_command(buffer, command, msg)) {
+                int count;
                 if (is_leave_command(command)) {
                     running = false;
                 } else {
                     count = count_tokens(msg, " ");
-                    execute_command(sock, command, msg, count);
+                    execute_command(client, command, msg, count);
                 }
             } else {
-                log_print_file_message(PATH, LOG_ERROR,"Invalid input. Commands should start with '\\'.");
+                if(strlen(buffer) == 0){
+                    log_print_prompt(LOG_USER,"Invalid input. Commands should start with '\\'.");
+                    continue;
+                }
+                if(client->logged_in){
+                    //send message
+                    log_print_prompt(LOG_USER,"mensaje enviado:");
+                } else {
+                    log_print_prompt(LOG_USER, "To send messages you need to login first!");
+                }
             }
             buffer[0] = '\0';
             command[0] = '\0';
@@ -70,11 +81,10 @@ int main(int argc, char const* argv[]) {
     return 0;
 }
 
-void *listener(void *arg){
-    listener_args_t *args = (listener_args_t *)arg;
+void *client_listener(void *arg){
+    client_listener_args_t *args = (client_listener_args_t *)arg;
     int sock = args->socket;
     Client *client = args->client;
-    free(arg);
 
     pthread_detach(pthread_self());
 
@@ -87,41 +97,29 @@ void *listener(void *arg){
         if(valread <= 0){
             continue;
         }
-
+        g_strstrip(buffer); 
         // Ensure null-termination after the last character read
         if (valread < MAX_BUFFER) {
             buffer[valread] = '\0';  // Set the last character to null terminator
         } else {
             buffer[MAX_BUFFER - 1] = '\0';  // Safeguard if buffer is filled
         }
-
         log_file_formatted_message(PATH, LOG_INFO,"received json: %s",buffer);
         if(!json_field_matches(buffer,"type",msg_type,sizeof(msg_type))){
             log_file_message(PATH, LOG_ERROR,"not a valid json: field 'type' missing");
             continue;
         }
-       process_message(client, sock, buffer, msg_type);
+       client_process_message(client, buffer, msg_type);
     }
+    free(arg);
     close(sock);
     return NULL;
 }
 
-int create_listener(int sock){
-    pthread_t ptid; 
-    listener_args_t *args = malloc(sizeof(listener_args_t));
-    if (args == NULL) {
-        perror("malloc failure");
-        exit(EXIT_FAILURE);
-    }
-    args->socket = sock;
-    args->process_message = process_message; 
-    pthread_create(&ptid, NULL, &listener, (void *)args); 
-    return 1;
-}
-
-
 // Execute the parsed command and pass the arguments
-void execute_command(int sock, const char *command, const char *args, int n_params) {
+void execute_command(Client *client, const char *command, const char *args, int n_params) {
+    int sock = client->socket;
+    bool logged = client->logged_in;
     switch (get_command_type(command)) {
         case CMD_HELP:
             handle_help(args);
@@ -130,12 +128,10 @@ void execute_command(int sock, const char *command, const char *args, int n_para
             handle_echo(args);
             break;
         case CMD_LOGIN:
-            if(n_params == 1 && strlen(args) > 2 && strlen(args) < 9){
-                handle_login(sock, args);
-            } else {
-                log_print_prompt(LOG_USER,"Username has to be between 3 and 8 characters long");
-                log_file_message(PATH, LOG_ERROR, "Invalid username");
-            }
+            handle_login(client, args, n_params);
+            break;
+        case CMD_LOGOUT:
+            handle_disconnected(client);
             break;
         default:
             handle_unknown(command);
@@ -143,62 +139,78 @@ void execute_command(int sock, const char *command, const char *args, int n_para
     }
 }
 
-
-void handle_login(int sock, const char *username){
-    //char username[50];  // Maximum username length of 49 characters (plus null terminator)
-    //ask_for_username(username, sizeof(username));
-    identify_client(sock, username);
+Client *client_init(int sock)
+{
+    Client* client = (Client*)malloc(sizeof(Client));
+    if (client == NULL) {
+        perror("malloc failure");
+        exit(EXIT_FAILURE);
+    }
+    client->logged_in = false;
+    client->socket = sock;
+    client->status = ONLINE; // Set default status if needed
+    return client;
 }
 
-
-//void handle_unknown(Client *client, int socket, char *buffer);
-
-void process_message(Client *client, int socket, char *buffer, const char *msg_type) {
-    // Client-specific message processing
-    log_file_formatted_message(PATH, LOG_INFO,"Client processing message: %s", buffer);
-    MessageType type = get_type(msg_type);
-    switch (type) {
-        case TYPE_NEW_USER:
-            handle_new_user(client, socket, buffer);
-            break;
-        case TYPE_NEW_STATUS:
-            handle_new_status(client, socket, buffer);
-            break;
-        case TYPE_USER_LIST:
-            handle_user_list(client, socket, buffer);
-            break;
-        case TYPE_TEXT_FROM:
-            handle_text_from(client, socket, buffer);
-            break;
-        case TYPE_PUBLIC_TEXT_FROM:
-            handle_public_text_from(client, socket, buffer);
-            break;
-        case TYPE_JOINED_ROOM:
-            handle_joined_room(client, socket, buffer);
-            break;
-        case TYPE_ROOM_USER_LIST:
-            handle_room_user_list(client, socket, buffer);
-            break;
-        case TYPE_ROOM_TEXT_FROM:
-            handle_room_text_from(client, socket, buffer);
-            break;
-        case TYPE_LEFT_ROOM:
-            handle_left_room(client, socket, buffer);
-            break;
-        case TYPE_DISCONNECTED:
-            handle_disconnected(client, socket, buffer);
-            break;
-        case TYPE_RESPONSE:
-            handle_response(client, socket, buffer);
-            break;
-        case TYPE_UNKNOWN:
-        default:
-            //handle_unknown(client, socket, buffer);
-            break;
+void handle_login(Client *client, const char *username, int n_params){
+    int sock = client->socket;
+    bool logged = client->logged_in;
+    if(logged){
+        log_print_prompt(LOG_USER,"You're already logged in. Log out first.");
+        return;
+    }
+    if(n_params == 1 && strlen(username) > 2 && strlen(username) < 9){
+        identify_client(sock, username);
+    } else {
+        log_print_prompt(LOG_USER,"Username has to be between 3 and 8 characters long");
+        log_file_message(PATH, LOG_ERROR, "Invalid username");
     }
 }
 
-
+void client_process_message(Client *client,  char *buffer, const char *msg_type) {
+    int socket = client->socket;
+    log_file_formatted_message(PATH, LOG_INFO,"Client processing message: %s", buffer);
+    ClientMessageType type = client_get_type(msg_type);
+    switch (type) {
+        case TYPE_NEW_USER:
+            handle_client_new_user(client, buffer);
+            break;
+        case TYPE_NEW_STATUS:
+            handle_new_status(client, buffer);
+            break;
+        case TYPE_USER_LIST:
+            handle_user_list(client, buffer);
+            break;
+        case TYPE_TEXT_FROM:
+            handle_text_from(client, buffer);
+            break;
+        case TYPE_PUBLIC_TEXT_FROM:
+            handle_public_text_from(client, buffer);
+            break;
+        case TYPE_JOINED_ROOM:
+            handle_joined_room(client, buffer);
+            break;
+        case TYPE_ROOM_USER_LIST:
+            handle_room_user_list(client, buffer);
+            break;
+        case TYPE_ROOM_TEXT_FROM:
+            handle_room_text_from(client, buffer);
+            break;
+        case TYPE_LEFT_ROOM:
+            handle_left_room(client, buffer);
+            break;
+        case TYPE_DISCONNECTED:
+            handle_disconnected(client);
+            break;
+        case TYPE_CLIENT_RESPONSE:
+            handle_client_response(client, buffer);
+            break;
+        case TYPE_NOT_KNOWN:
+        default:
+            //handle_unknown(client, buffer);
+            break;
+    }
+}
 
 void ask_for_username(char *username, int max_len) {
     printf("Enter your username: ");
@@ -283,11 +295,165 @@ void handle_help(const char *args) {
 
 // Handle the '\echo' command
 void handle_echo(const char *args) {
-    printf("Echo: %s\n", args);
+    log_print_prompt(LOG_USER,"%s\n", args);
 }
 
 // Handle unknown commands
 void handle_unknown(const char *command) {
+}
+
+
+
+void handle_client_new_user(Client *client,  char *buffer) {
+    // TODO: Implement handling for new user
+}
+
+void handle_new_status(Client *client,  char *buffer) {
+    // TODO: Implement handling for new status
+}
+
+void handle_user_list(Client *client,  char *buffer) {
+    // TODO: Implement handling for user list
+}
+
+void handle_text_from(Client *client,  char *buffer) {
+    // TODO: Implement handling for text from user
+}
+
+void handle_public_text_from(Client *client,  char *buffer) {
+    // TODO: Implement handling for public text from user
+}
+
+void handle_joined_room(Client *client,  char *buffer) {
+    // TODO: Implement handling for joined room
+}
+
+void handle_room_user_list(Client *client,  char *buffer) {
+    // TODO: Implement handling for room user list
+}
+
+void handle_room_text_from(Client *client,  char *buffer) {
+    // TODO: Implement handling for room text from user
+}
+
+void handle_left_room(Client *client,  char *buffer) {
+    // TODO: Implement handling for left room
+}
+
+void handle_disconnected(Client *client) {
+    bool logged = client->logged_in;
+    if(!logged){
+        log_print_prompt(LOG_USER,"You're already logged out. Log out first.");
+    }
+    //send disconnect notification
+}
+
+void handle_client_response(Client *client,  char *json_str) {
+    int socket = client->socket;
+    char operation[VALUE_MAX_LENGHT] = { 0 };
+    json_extract_field_value(json_str, FIELD_OPERATION, operation, VALUE_MAX_LENGHT);
+
+    if (strcmp(operation, "IDENTIFY") == 0) {
+        handle_identify_response(client, json_str);
+    } else if (strcmp(operation, "LEAVE_ROOM") == 0) {
+        handle_leave_room_response(client, json_str);
+    } else if (strcmp(operation, "ROOM_TEXT") == 0) {
+        handle_room_text_response(client, json_str);
+    } else if (strcmp(operation, "ROOM_USERS") == 0) {
+        handle_room_users_response(client, json_str);
+    } else if (strcmp(operation, "JOIN_ROOM") == 0) {
+        handle_join_room_response(client, json_str);
+    } else if (strcmp(operation, "INVITE") == 0) {
+        handle_invite_response(client, json_str);
+    } else if (strcmp(operation, "TEXT") == 0) {
+        handle_text_response(client, json_str);
+    } else {
+        handle_unknown_operation_response(client, json_str);
+        log_file_formatted_message(PATH, LOG_ERROR,"wrong response. Received: ", json_str);
+    } 
+}
+
+void handle_identify_response(Client *client,  char *json_str) {
+    int socket = client->socket;
+    char value[VALUE_MAX_LENGHT] = { 0 };
+    json_extract_field_value(json_str, FIELD_RESULT,value, VALUE_MAX_LENGHT);
+    if(strcmp(value, RESULT_SUCCESS) == 0){
+        char extra[9] = { 0 };
+        json_extract_field_value(json_str, FIELD_EXTRA,extra, VALUE_MAX_LENGHT);
+        log_print_prompt(LOG_USER,"Welcome, %s!", extra);
+        login_client(client,true,ONLINE,extra);
+    }else if(strcmp(value, RESULT_USER_ALREADY_EXISTS) == 0){
+        log_file_formatted_message(PATH, LOG_ERROR,"Identification failed. Received: %s", json_str);
+        log_print_prompt(LOG_USER,"User already taken. Choose another one and log in","");
+    }
+
+}
+
+
+void handle_leave_room_response(Client *client,  char *json_str){
+
+}
+void handle_room_text_response(Client *client,  char *json_str)
+{
+
+}
+void handle_room_users_response(Client *client,  char *json_str)
+{
+
+}
+void handle_join_room_response(Client *client,  char *json_str)
+{
+
+}
+void handle_invite_response(Client *client,  char *json_str)
+{
+
+}
+void handle_text_response(Client *client,  char *json_str)
+{
+
+}
+void handle_unknown_operation_response(Client *client,  char *json_str)
+{
+
+}
+
+void login_client(Client *client, bool logged, Status status, const char *user) {
+    update_client(client, logged, status);
+    snprintf(client->username, sizeof(client->username), "%s", user);
+    // Use snprintf instead of strncpy to avoid truncation issues
+}
+void update_client(Client *client, bool logged, Status status) {
+    client->logged_in = logged;  // true
+    client->status = status;
+}
+
+ClientMessageType client_get_type(const char *message_type) {
+    if (strcmp(message_type, "NEW_USER") == 0) {
+        return TYPE_NEW_USER;
+    } else if (strcmp(message_type, "STATUS_UPDATE") == 0) {
+        return TYPE_NEW_STATUS;
+    } else if (strcmp(message_type, "USER_LIST") == 0) {
+        return TYPE_USER_LIST;
+    } else if (strcmp(message_type, "TEXT_FROM") == 0) {
+        return TYPE_TEXT_FROM;
+    } else if (strcmp(message_type, "PUBLIC_TEXT_FROM") == 0) {
+        return TYPE_PUBLIC_TEXT_FROM;
+    } else if (strcmp(message_type, "JOINED_ROOM") == 0) {
+        return TYPE_JOINED_ROOM;
+    } else if (strcmp(message_type, "ROOM_USER_LIST") == 0) {
+        return TYPE_ROOM_USER_LIST;
+    } else if (strcmp(message_type, "ROOM_TEXT_FROM") == 0) {
+        return TYPE_ROOM_TEXT_FROM;
+    } else if (strcmp(message_type, "LEFT_ROOM") == 0) {
+        return TYPE_LEFT_ROOM;
+    } else if (strcmp(message_type, "DISCONNECTED") == 0) {
+        return TYPE_DISCONNECTED;
+    } else if (strcmp(message_type, "RESPONSE") == 0) {
+        return TYPE_CLIENT_RESPONSE;
+    } else {
+        return TYPE_NOT_KNOWN;
+    }
 }
 
 enum Command get_command_type(const char* command) {
@@ -303,119 +469,11 @@ enum Command get_command_type(const char* command) {
     }
 }
 
+//void handle_not_known(Client *client,  char *buffer);
+
 void handle_sigint(int sig){
     //implement a way to close each socket, and close each thread
     const char *goodbye = "\nLeaving... Goodbye!";
     log_print_file_message(PATH,LOG_INFO,goodbye);
     stop = 1;
-}
-
-
-
-
-void handle_new_user(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for new user
-}
-
-void handle_new_status(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for new status
-}
-
-void handle_user_list(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for user list
-}
-
-void handle_text_from(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for text from user
-}
-
-void handle_public_text_from(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for public text from user
-}
-
-void handle_joined_room(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for joined room
-}
-
-void handle_room_user_list(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for room user list
-}
-
-void handle_room_text_from(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for room text from user
-}
-
-void handle_left_room(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for left room
-}
-
-void handle_disconnected(Client *client, int socket, char *buffer) {
-    // TODO: Implement handling for disconnection
-}
-
-void handle_response(Client *client, int socket, char *json_str) {
-    char operation[VALUE_MAX_LENGHT] = { 0 };
-    json_extract_field_value(json_str, FIELD_OPERATION, operation, VALUE_MAX_LENGHT);
-
-    if (strcmp(operation, "IDENTIFY") == 0) {
-        handle_identify_response(client, socket, json_str);
-    } else if (strcmp(operation, "LEAVE_ROOM") == 0) {
-        handle_leave_room_response(client, socket, json_str);
-    } else if (strcmp(operation, "ROOM_TEXT") == 0) {
-        handle_room_text_response(client, socket, json_str);
-    } else if (strcmp(operation, "ROOM_USERS") == 0) {
-        handle_room_users_response(client, socket, json_str);
-    } else if (strcmp(operation, "JOIN_ROOM") == 0) {
-        handle_join_room_response(client, socket, json_str);
-    } else if (strcmp(operation, "INVITE") == 0) {
-        handle_invite_response(client, socket, json_str);
-    } else if (strcmp(operation, "TEXT") == 0) {
-        handle_text_response(client, socket, json_str);
-    } else {
-        handle_unknown_operation_response(client, socket, json_str);
-        log_file_formatted_message(PATH, LOG_ERROR,"wrong response. Received: ", json_str);
-    } 
-}
-
-void handle_identify_response(Client *client, int socket, char *json_str) {
-    char value[VALUE_MAX_LENGHT] = { 0 };
-    json_extract_field_value(json_str, FIELD_RESULT,value, VALUE_MAX_LENGHT);
-    if(strcmp(value, RESULT_SUCCESS) == 0){
-        char extra[VALUE_MAX_LENGHT];
-        json_extract_field_value(json_str, FIELD_EXTRA,extra, VALUE_MAX_LENGHT);
-        log_print_prompt(LOG_USER,"Welcome, %s!", extra);
-    }else if(strcmp(value, RESULT_USER_ALREADY_EXISTS) == 0){
-        log_file_formatted_message(PATH, LOG_ERROR,"Identification failed. Received: %s", json_str);
-        log_print_prompt(LOG_USER,"User already taken. Choose another one and log in","");
-    }
-
-}
-
-
-void handle_leave_room_response(Client *client, int socket, char *json_str){
-
-}
-void handle_room_text_response(Client *client, int socket, char *json_str)
-{
-
-}
-void handle_room_users_response(Client *client, int socket, char *json_str)
-{
-
-}
-void handle_join_room_response(Client *client, int socket, char *json_str)
-{
-
-}
-void handle_invite_response(Client *client, int socket, char *json_str)
-{
-
-}
-void handle_text_response(Client *client, int socket, char *json_str)
-{
-
-}
-void handle_unknown_operation_response(Client *client, int socket, char *json_str)
-{
-
 }

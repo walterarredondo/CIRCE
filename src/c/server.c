@@ -26,7 +26,7 @@ int main(int argc, char const* argv[]) {
     int new_socket;
     struct sockaddr_in address; 
     Server *server = server_init(); 
-    GList *thread_list = NULL;
+    GList *thread_pool = NULL;
     setbuf(stdout, NULL); 
 
 
@@ -38,17 +38,17 @@ int main(int argc, char const* argv[]) {
     while (!stop){
         start_listening(server_fd, &config);
         new_socket = accept_connection(server_fd, &address);
-        thread_list = create_listener_thread(server, new_socket, thread_list);
+        thread_pool = create_thread_pool(server, new_socket, thread_pool);
     }
     log_server_message(PATH, LOG_INFO,"quitting gracefully. goodbye!");
-    g_list_free_full(thread_list, free); 
+    g_list_free_full(thread_pool, free); 
     close(server_fd);
     return EXIT_SUCCESS;
 }
 
 
-void *listener(void *arg){
-    listener_args_t *args = (listener_args_t *)arg;
+void *server_listener(void *arg){
+    server_listener_args_t *args = (server_listener_args_t *)arg;
     int sock = args->socket;
     Server *server = args->server;
 
@@ -92,7 +92,7 @@ void *listener(void *arg){
 void process_message(Server *server, int sock, char *buffer, const char *message_type) {
     // Use strcmp to compare strings and switch-case for handling various message types
     log_server_message(PATH, LOG_INFO,"Server processing message: %s", buffer);
-    MessageType type = get_type(message_type);
+    MessageType type = server_get_type(message_type);
     switch (type) {
         case TYPE_IDENTIFY:
             handle_identify(server, sock, buffer);
@@ -371,10 +371,10 @@ static void handle_sigint(int _){
     kill(-getpgrp(), SIGQUIT); 
 }
 
-GList *create_listener_thread(Server *server, int new_socket, GList *thread_list) {
+GList *create_thread_pool(Server *server, int new_socket, GList *thread_list) {
     pthread_t ptid; 
     // Allocate memory for listener arguments
-    listener_args_t *args = malloc(sizeof(listener_args_t));
+    server_listener_args_t *args = malloc(sizeof(server_listener_args_t));
     if (args == NULL) {
         perror("malloc failure");
         exit(EXIT_FAILURE);
@@ -385,7 +385,7 @@ GList *create_listener_thread(Server *server, int new_socket, GList *thread_list
     args->socket = new_socket;
 
     // Create the new thread
-    if (pthread_create(&ptid, NULL, &listener, (void *)args) != 0) {
+    if (pthread_create(&ptid, NULL, &server_listener, (void *)args) != 0) {
         perror("pthread_create failure");
         exit(EXIT_FAILURE);
     }
@@ -404,7 +404,7 @@ GList *create_listener_thread(Server *server, int new_socket, GList *thread_list
     return thread_list;
 }
 
-MessageType get_type(const char *message_type) {
+MessageType server_get_type(const char *message_type) {
     if (strcmp(message_type, "IDENTIFY") == 0) {
         return TYPE_IDENTIFY;
     } else if (strcmp(message_type, "RESPONSE") == 0) {

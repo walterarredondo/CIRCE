@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include "connection.h"
 
 
@@ -125,5 +126,19 @@ int setup_server_address(struct server_config *config, struct sockaddr_in *addre
         perror("Invalid address / Address not supported");
         return 0;
     }
+    return 1;
+}
+
+int client_create_listener(Client *client, client_process_message_func process_message, client_listener_args_t *args, void *(*listener)(void *)) {
+    pthread_t ptid; 
+    args = malloc(sizeof(client_listener_args_t));
+    if (args == NULL) {
+        perror("malloc failure");
+        exit(EXIT_FAILURE);
+    }
+    args->client = client;
+    args->socket = client->socket;
+    args->client_process_message = process_message; 
+    pthread_create(&ptid, NULL, listener, (void *)args); 
     return 1;
 }
