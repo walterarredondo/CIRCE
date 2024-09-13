@@ -50,8 +50,9 @@ int main(int argc, char const* argv[]) {
     signal(SIGINT, handle_sigint);
     while (!stop){
         start_listening(server_fd, config);
-        new_socket = accept_connection(server_fd, &address);
-        thread_pool = create_thread_pool(server, new_socket, thread_pool);
+        int new_socket = accept_connection(server_fd, &address);
+        UserInfo *user = initialize_user(new_socket);
+        thread_pool = create_thread_pool(server, user, thread_pool);
     }
     log_server_message(PATH, LOG_INFO,"quitting gracefully. goodbye!");
     g_list_free_full(thread_pool, free); 
@@ -60,10 +61,23 @@ int main(int argc, char const* argv[]) {
 }
 
 
+
+UserInfo *initialize_user(int sock){
+    UserInfo *user = (UserInfo *)malloc(sizeof(UserInfo));
+    if (user == NULL) {
+        // Manejo de error si malloc falla
+        fprintf(stderr, "Error al asignar memoria\n");
+        exit(EXIT_FAILURE);
+    }
+    user->socket = sock;
+    return user;
+}
+
 void *server_listener(void *arg){
     server_listener_args_t *args = (server_listener_args_t *)arg;
-    int sock = args->socket;
+    UserInfo *user = args->user_info;
     Server *server = args->server;
+    int sock = user->socket;
 
     if (server->user_table == NULL) {
         log_server_message(PATH, LOG_ERROR, "Error while creating user_table");
@@ -169,7 +183,7 @@ void handle_identify(Server *server, int sock, char* buffer){
         }
         log_server_message(PATH, LOG_ERROR, "User already exists, choose another one %s", found_user->username);
     } else {
-        server_add_user(server, username,"ONLINE",sock);
+        server_add_user(server, username,1,sock);
         if(!identify_response_success(sock,username)){
             log_server_message(PATH, LOG_ERROR,"Response to identification failed");
         }
@@ -349,10 +363,10 @@ void server_cleanup(Server *server) {
 
 
 // Function to create a new user
-UserInfo* create_user(const char *username, const char *status, int socket) {
+UserInfo* create_user(const char *username, int status, int socket) {
     UserInfo *user = g_new(UserInfo, 1);
     user->username = g_strdup(username);  // Create a copy of the username
-    user->status = g_strdup(status);      // Create a copy of the status
+    user->status = status;      // Create a copy of the status
     user->socket = socket;
     return user;
 }
@@ -361,13 +375,14 @@ UserInfo* create_user(const char *username, const char *status, int socket) {
 void free_user(gpointer data) {
     UserInfo *user = (UserInfo *)data;
     g_free(user->username);
-    g_free(user->status);
+    //g_free(user->status);
+    //g_free(user->socket);
     g_free(user);
 }
 
 
 // Function to add a user to the server's user table
-void server_add_user(Server *server, const char *username, const char *status, int socket) {
+void server_add_user(Server *server, const char *username, int status, int socket) {
     g_hash_table_insert(server->user_table, g_strdup(username), create_user(username, status, socket));
 }
 
@@ -384,7 +399,7 @@ static void handle_sigint(int _){
     kill(-getpgrp(), SIGQUIT); 
 }
 
-GList *create_thread_pool(Server *server, int new_socket, GList *thread_list) {
+GList *create_thread_pool(Server *server, UserInfo *user, GList *thread_list) {
     pthread_t ptid; 
     // Allocate memory for listener arguments
     server_listener_args_t *args = malloc(sizeof(server_listener_args_t));
@@ -395,7 +410,7 @@ GList *create_thread_pool(Server *server, int new_socket, GList *thread_list) {
 
     // Set the arguments for the listener
     args->server = server;
-    args->socket = new_socket;
+    args->user_info = user;
 
     // Create the new thread
     if (pthread_create(&ptid, NULL, &server_listener, (void *)args) != 0) {

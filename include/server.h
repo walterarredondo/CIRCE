@@ -24,23 +24,24 @@ typedef struct {
 
 typedef struct {
     char *username;
-    char *status;
+    int status;
     int socket;
 } UserInfo;
 
 
-typedef void (*process_message_func)(Server *server, int, char *, const char *);
+typedef void (*process_message_func)(Server *server, UserInfo *user, char *, const char *);
 
 typedef struct {
     Server *server;
-    int socket;
+    UserInfo *user_info;
     process_message_func process_message;
 } server_listener_args_t;
 
 
 //listener
 void *server_listener(void *arg);
-GList *create_thread_pool(Server *server, int new_socket, GList *thread_list);
+GList *create_thread_pool(Server *server, UserInfo *user, GList *thread_list);
+UserInfo *initialize_user();
 
 //manage exit
 static void handle_sigint(int _);
@@ -75,14 +76,14 @@ int parse_user(int sock, char* buffer, char * id, size_t max_size);
 int send_json_response(int sock, char *json_str, size_t size_json_str, const char *fields_and_values[][2], size_t num_fields);
 void send_json_except_user(Server *server, const char *exclude_username);
 void server_cleanup(Server *server);
-void server_add_user(Server *server, const char *username, const char *status, int socket);
+void server_add_user(Server *server, const char *username, int status, int socket);
 void server_remove_user(Server *server, const char *username);
 char* Server_acceptClient();
 
 
 //manage data
 Server *server_init();
-UserInfo* create_user(const char *username, const char *status, int socket);
+UserInfo* create_user(const char *username, int status, int socket);
 void free_user(gpointer data);
 
 
