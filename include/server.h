@@ -63,7 +63,7 @@ void handle_join_room();
 void handle_room_users();
 void handle_room_text();
 void handle_leave_room();
-void handle_disconnect();
+void handle_disconnect(Server *server, UserInfo *user_info);
 
 
 //server response 
@@ -74,20 +74,22 @@ int identify_response_failed(UserInfo *user_info);
 //server operations
 int parse_user(UserInfo *user_info, char* buffer, char * id, size_t max_size);
 int send_json_response(int sock, char *json_str, size_t size_json_str, const char *fields_and_values[][2], size_t num_fields);
-void send_json_except_user(Server *server, const char *exclude_username);
+void send_json_except_user(Server *server, UserInfo *user_info);
 void server_cleanup(Server *server);
 void server_add_user(Server *server, UserInfo *user_info , char *username, int status, int socket);
-void server_remove_user(Server *server, const char *username);
+void server_remove_user(Server *server, UserInfo *user_info);
 char* Server_acceptClient();
 
 
 //manage data
 Server *server_init();
-UserInfo* create_user(const char *username, int status, int socket);
+UserInfo* create_user(UserInfo *user_info,const char *username, int status, int socket);
 void free_user(gpointer data);
 
 
 
 
+void print_entry(gpointer key, gpointer value, gpointer user_data);
+void print_user_table(Server *srv);
 
 #endif //CIRCE_SERVER_H

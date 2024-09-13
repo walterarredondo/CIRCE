@@ -94,7 +94,6 @@ void start_listening(int server_fd, struct server_config *config) {
         perror("listen failed");
         exit(EXIT_FAILURE);
     }
-    printf("Server is listening...\n");
 }
 
 // Function to accept a new connection

@@ -20,6 +20,7 @@
 #define VALUE_MAX_LENGHT 32
 #define USER_MAX_LENGHT 9
 #define FIELD_OPERATION "operation"
+#define FIELD_USERNAME "username"
 #define FIELD_RESULT "result"
 #define FIELD_EXTRA "extra"
 #define VALUE_IDENTIFY "IDENTIFY"
@@ -45,10 +46,10 @@ int main(int argc, char const* argv[]) {
     if (argc > 1 && parse_arguments(argc, argv, ip_address, &port) == 0) {
         if(strlen(ip_address)>0){
             set_ip_address(config,ip_address);
-            log_server_message(PATH, LOG_SUCCESS,"IP address set to: %s", ip_address);
+            log_file_formatted_message(PATH, LOG_SUCCESS,"IP address set to: %s", ip_address);
         } else if (port != 0) {
             set_port(config, port);
-            log_server_message(PATH, LOG_SUCCESS,"Port set to: %i", port);
+            log_file_formatted_message(PATH, LOG_SUCCESS,"Port set to: %i", port);
         }
     }
 
@@ -102,8 +103,8 @@ void *client_listener(void *arg){
     pthread_detach(pthread_self());
 
     ssize_t valread = 1;
-    char buffer[MAX_BUFFER];
-    char msg_type[TYPE_MAX_LENGHT];
+    char buffer[MAX_BUFFER] = { 0 };
+    char msg_type[TYPE_MAX_LENGHT] = { 0 };
 
     while (valread != 0){
         valread = read(sock, buffer, MAX_BUFFER);
@@ -347,8 +348,11 @@ void handle_unknown(const char *command) {
 
 
 
-void handle_client_new_user(Client *client,  char *buffer) {
+void handle_client_new_user(Client *client,  char *json_str) {
     // TODO: Implement handling for new user
+    char user[9];
+    json_extract_field_value(json_str,FIELD_USERNAME,user,USER_MAX_LENGHT);
+    log_print_prompt(LOG_USER, "\n%s joined the chat", user);
 }
 
 void handle_new_status(Client *client,  char *buffer) {

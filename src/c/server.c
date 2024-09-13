@@ -50,6 +50,7 @@ int main(int argc, char const* argv[]) {
     signal(SIGINT, handle_sigint);
     while (!stop){
         start_listening(server_fd, config);
+        log_server_message(PATH, LOG_SUCCESS, "Server is listening...");
         int new_socket = accept_connection(server_fd, &address);
         UserInfo *user = initialize_user(new_socket);
         thread_pool = create_thread_pool(server, user, thread_pool);
@@ -84,7 +85,6 @@ void *server_listener(void *arg){
         return NULL;
     }
 
-    free(arg);
 
     pthread_detach(pthread_self());
 
@@ -109,9 +109,11 @@ void *server_listener(void *arg){
             log_server_message(PATH, LOG_ERROR, "not a valid json: field 'type' missing");
             continue;
         }
-       process_message(server, user_info, buffer, msg_type);
+        user_info->socket = sock;
+        process_message(server, user_info, buffer, msg_type);
     }
-    close(sock);
+    free(arg);
+    log_server_message(PATH, LOG_SUCCESS, "Disconnection successful");
     return NULL;
 }
 
@@ -155,7 +157,7 @@ void process_message(Server *server, UserInfo *user_info, char *buffer, const ch
             handle_leave_room();
             break;
         case TYPE_DISCONNECT:
-            handle_disconnect();
+            handle_disconnect(server, user_info);
             break;
         case TYPE_RESPONSE:
             handle_response();
@@ -184,13 +186,14 @@ void handle_identify(Server *server, UserInfo *user_info, char* buffer){
         }
         log_server_message(PATH, LOG_ERROR, "User already exists, choose another one %s", found_user->username);
     } else {
+        //adding user to the server
         server_add_user(server, user_info, username,1,sock);
         if(!identify_response_success(user_info)){
             log_server_message(PATH, LOG_ERROR,"Response to identification failed");
         }
-        log_server_message(PATH, LOG_SUCCESS,"User '%s' added to the server user list.", username);
-        send_json_except_user(server,username);
-        log_server_message(PATH, LOG_SUCCESS,"All responses to clients were sent.");
+        log_server_message(PATH, LOG_SUCCESS,"User '%s' added to the server user list.", user_info->username);
+        send_json_except_user(server,user_info);
+        log_server_message(PATH, LOG_SUCCESS,"All responses were sent to clients.");
     }
 
 }
@@ -245,8 +248,12 @@ void handle_leave_room() {
     printf("Handling LEAVE_ROOM\n");
 }
 
-void handle_disconnect() {
-    printf("Handling DISCONNECT\n");
+void handle_disconnect(Server *server, UserInfo *user_info) {
+    print_user_table(server);
+    close(user_info->socket);
+    server_remove_user(server,user_info);
+    print_user_table(server);
+    log_server_message(PATH, LOG_SUCCESS, "Disconnected correctly");
 }
 
 
@@ -272,6 +279,7 @@ int parse_user(UserInfo *user_info, char* json_str, char * username, size_t max_
 
 int identify_response_success(UserInfo *user_info){
     char json_str[256] = "";  // Start with an empty JSON string
+
     const char *fields_and_values[][2] = {
         {"type", "RESPONSE"},
         {"operation", "IDENTIFY"},
@@ -296,10 +304,11 @@ int identify_response_failed(UserInfo *user_info){
 }
 
 
-void send_json_except_user(Server *server, const char *exclude_username) {
+void send_json_except_user(Server *server, UserInfo *user_info) {
     GHashTableIter iter;
     gpointer key, value;
     char json_str[1024] = ""; // Buffer for the JSON string response
+    const char *exclude_username =  user_info->username;
     const char *fields_and_values[][2] = {
         {"type", "NEW_USER"},
         {"username", exclude_username}
@@ -363,8 +372,8 @@ void server_cleanup(Server *server) {
 
 
 // Function to create a new user
-UserInfo* create_user(const char *username, int status, int socket) {
-    UserInfo *user = g_new(UserInfo, 1);
+UserInfo* create_user(UserInfo *user,const char *username, int status, int socket) {
+    //UserInfo *user = g_new(UserInfo, 1);
     user->username = g_strdup(username);  // Create a copy of the username
     user->status = status;      // Create a copy of the status
     user->socket = socket;
@@ -374,24 +383,22 @@ UserInfo* create_user(const char *username, int status, int socket) {
 // Function to free the memory allocated for a user
 void free_user(gpointer data) {
     UserInfo *user = (UserInfo *)data;
-    g_free(user->username);
-    //g_free(user->status);
-    //g_free(user->socket);
     g_free(user);
 }
 
 
 // Function to add a user to the server's user table
 void server_add_user(Server *server, UserInfo *user_info, char *username, int status, int socket) {
-    g_hash_table_insert(server->user_table, g_strdup(username), create_user(username, status, socket));
-    user_info->username = username;
-    user_info->socket = socket;
-    user_info->status = status;
+    user_info = create_user(user_info, username, status, socket);
+    g_hash_table_insert(server->user_table, user_info->username, user_info);
 }
 
 // Function to remove a user from the server's user table
-void server_remove_user(Server *server, const char *username) {
-    g_hash_table_remove(server->user_table, username);
+void server_remove_user(Server *server, UserInfo *user_info) {
+    gboolean removed = g_hash_table_remove(server->user_table, user_info->username);
+    if (!removed) {
+        log_server_message(PATH, LOG_ERROR, "error removing");
+    }
 }
 
 static void handle_sigint(int _){
@@ -465,5 +472,21 @@ MessageType server_get_type(const char *message_type) {
         return TYPE_DISCONNECT;
     } else {
         return TYPE_UNKNOWN;
+    }
+}
+
+
+// Function to print each key-value pair
+void print_entry(gpointer key, gpointer value, gpointer user_data) {
+    log_server_message(PATH, LOG_INFO,"Key: %s", (char *)key);
+}
+
+// Function to print all entries in the GHashTable
+void print_user_table(Server *srv) {
+    if (srv->user_table != NULL) {
+        log_server_message(PATH, LOG_SUCCESS,"Printing Users:");
+        g_hash_table_foreach(srv->user_table, print_entry, NULL);
+    } else {
+        log_server_message(PATH, LOG_ERROR,"Table is NULL");
     }
 }
