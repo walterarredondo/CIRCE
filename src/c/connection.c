@@ -6,16 +6,18 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <ctype.h>
 #include "connection.h"
 
 
 // Function to initialize server configuration with defaults
-struct server_config initialize_config() {
-    struct server_config config;
-    config.port = DEFAULT_PORT;
-    config.reuse_address = 1;
-    config.listen_queue_size = DEFAULT_QUEUE_SIZE;
-    strcpy(config.ip_address, DEFAULT_IP);
+struct server_config* initialize_config() {
+    //struct server_config* config;
+    struct server_config* config = (struct server_config*)malloc(sizeof(struct server_config));
+    config->port = DEFAULT_PORT;
+    config->reuse_address = 1;
+    config->listen_queue_size = DEFAULT_QUEUE_SIZE;
+    strcpy(config->ip_address, DEFAULT_IP);
     return config;
 }
 
@@ -140,5 +142,57 @@ int client_create_listener(Client *client, client_process_message_func process_m
     args->socket = client->socket;
     args->client_process_message = process_message; 
     pthread_create(&ptid, NULL, listener, (void *)args); 
+    return 1;
+}
+
+
+
+int parse_arguments(int argc, const char *argv[], char *ip_address, int *port) {
+    if (argc > 5) {
+        fprintf(stderr, "Usage: %s --ip <ip_address> --port <port_number>\n", argv[0]);
+        return -1;
+    }
+
+    for (int i = 1; i < argc; i += 2) {
+        if (strcmp(argv[i], "--ip") == 0) {
+            if (!is_valid_ip(argv[i+1])) {
+                fprintf(stderr, "Invalid IP address: %s\n", argv[i+1]);
+                return -1;
+            }
+            strcpy(ip_address, argv[i+1]);
+        } else if (strcmp(argv[i], "--port") == 0) {
+            if (!is_valid_port(argv[i+1])) {
+                fprintf(stderr, "Invalid port number: %s\n", argv[i+1]);
+                return -1;
+            }
+            *port = atoi(argv[i+1]);
+        } else {
+            fprintf(stderr, "Unknown argument: %s\n", argv[i]);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+
+// Function to verify if a string is a valid IP address
+int is_valid_ip(const char *ip) {
+    struct sockaddr_in sa;
+    return inet_pton(AF_INET, ip, &(sa.sin_addr)) == 1;
+}
+
+// Function to verify if a string is a valid port number (1-65535)
+int is_valid_port(const char *port_str) {
+    int port = atoi(port_str);
+    if (port <= 0 || port > 65535) {
+        return 0;
+    }
+    // Use size_t for the loop variable to match strlen's return type
+    for (size_t i = 0; i < strlen(port_str); i++) {
+        if (!isdigit((unsigned char)port_str[i])) {
+            return 0;
+        }
+    }
     return 1;
 }

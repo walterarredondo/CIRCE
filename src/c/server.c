@@ -25,18 +25,31 @@ static volatile sig_atomic_t stop = 0;
 int main(int argc, char const* argv[]) {
     int new_socket;
     struct sockaddr_in address; 
-    Server *server = server_init(); 
     GList *thread_pool = NULL;
     setbuf(stdout, NULL); 
+    Server *server = server_init(); 
 
 
-    struct server_config config = initialize_config();
+
+    struct server_config* config = initialize_config();
+    char ip_address[16] = "";  
+    int port = 0;             
+    if (argc > 1 && parse_arguments(argc, argv, ip_address, &port) == 0) {
+        if(strlen(ip_address)>0){
+            set_ip_address(config,ip_address);
+            log_server_message(PATH, LOG_SUCCESS,"IP address set to: %s", ip_address);
+        } else if (port != 0) {
+            set_port(config, port);
+            log_server_message(PATH, LOG_SUCCESS,"Port set to: %i", port);
+        }
+    }
+
     int server_fd = create_socket();
-    set_socket_options(server_fd,&config);
-    bind_socket(server_fd, &address, &config);
+    set_socket_options(server_fd,config);
+    bind_socket(server_fd, &address, config);
     signal(SIGINT, handle_sigint);
     while (!stop){
-        start_listening(server_fd, &config);
+        start_listening(server_fd, config);
         new_socket = accept_connection(server_fd, &address);
         thread_pool = create_thread_pool(server, new_socket, thread_pool);
     }
@@ -403,6 +416,7 @@ GList *create_thread_pool(Server *server, int new_socket, GList *thread_list) {
 
     return thread_list;
 }
+
 
 MessageType server_get_type(const char *message_type) {
     if (strcmp(message_type, "IDENTIFY") == 0) {

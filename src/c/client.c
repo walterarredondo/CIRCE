@@ -32,16 +32,29 @@ volatile sig_atomic_t stop = 0;
 
 int main(int argc, char const* argv[]) {
     struct sockaddr_in address; 
-    struct server_config config = initialize_config();
     int sock;
     char buffer[MAX_BUFFER];
     char command[16];
     char msg[MAX_BUFFER];
     bool running = true;
-    setbuf(stdout, NULL); 
+    setbuf(stdout, NULL);
+
+    char ip_address[16] = "";  
+    int port = 0;             
+    struct server_config* config = initialize_config();
+    if (argc > 1 && parse_arguments(argc, argv, ip_address, &port) == 0) {
+        if(strlen(ip_address)>0){
+            set_ip_address(config,ip_address);
+            log_server_message(PATH, LOG_SUCCESS,"IP address set to: %s", ip_address);
+        } else if (port != 0) {
+            set_port(config, port);
+            log_server_message(PATH, LOG_SUCCESS,"Port set to: %i", port);
+        }
+    }
+
     sock = create_socket();
-    set_socket_options(sock,&config);
-    setup_server_address(&config, &address);
+    set_socket_options(sock,config);
+    setup_server_address(config, &address);
     signal(SIGINT, handle_sigint);
     Client *client = client_init(sock);;
     client_listener_args_t args;

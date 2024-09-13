@@ -25,7 +25,10 @@ struct server_config {
 // Function declarations
 
 // Initialize server configuration with default values
-struct server_config initialize_config();
+struct server_config* initialize_config();
+int parse_arguments(int argc, const char *argv[], char *ip_address, int *port);
+int is_valid_ip(const char *ip);
+int is_valid_port(const char *port_str);
 
 // Setters and Getters for server configuration parameters
 void set_port(struct server_config *config, int port);
