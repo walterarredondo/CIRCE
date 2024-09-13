@@ -64,6 +64,7 @@ int de_identify_client(Client *client);
 void ask_for_username(char *username, int max_len);
 void login_client(Client *client, bool logged, Status status, const char *user);
 void update_client(Client *client, bool logged, Status status);
+int send_public_text(Client *client, char *msg);
 
 
 // functions that handle operations with the server

@@ -56,7 +56,7 @@ void handle_new_user();
 void handle_status();
 void handle_users();
 void handle_text();
-void handle_public_text();
+void handle_public_text(Server *server, UserInfo *user_info, const char *buffer);
 void handle_new_room();
 void handle_invite();
 void handle_join_room();
@@ -68,18 +68,18 @@ void handle_disconnect(Server *server, UserInfo *user_info);
 
 //server response 
 int identify_response_success(UserInfo *user_info);
-int identify_response_failed(UserInfo *user_info);
+int identify_response_failed(UserInfo *user_info, const char *user);
 
 
 //server operations
 int parse_user(UserInfo *user_info, char* buffer, char * id, size_t max_size);
 int send_json_response(int sock, char *json_str, size_t size_json_str, const char *fields_and_values[][2], size_t num_fields);
-void send_json_except_user(Server *server, UserInfo *user_info);
+void send_json_except_user(Server *server, UserInfo *user_info, const char *fields_and_values[][2], size_t num_fields);
 void server_cleanup(Server *server);
 void server_add_user(Server *server, UserInfo *user_info , char *username, int status, int socket);
 void server_remove_user(Server *server, UserInfo *user_info);
 char* Server_acceptClient();
-
+void new_user_identified_response(Server *server, UserInfo *user_info);
 
 //manage data
 Server *server_init();

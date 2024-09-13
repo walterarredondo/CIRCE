@@ -14,18 +14,6 @@
 #include "json_utils.h"
 #include "connection.h"
 #include "logger.h"
-#define MAX_BUFFER 2048
-#define MAX_BUFFER_LOG 1024
-#define TYPE_MAX_LENGHT 32
-#define VALUE_MAX_LENGHT 32
-#define USER_MAX_LENGHT 9
-#define FIELD_OPERATION "operation"
-#define FIELD_USERNAME "username"
-#define FIELD_RESULT "result"
-#define FIELD_EXTRA "extra"
-#define VALUE_IDENTIFY "IDENTIFY"
-#define RESULT_SUCCESS "SUCCESS"
-#define RESULT_USER_ALREADY_EXISTS "USER_ALREADY_EXISTS"
 
 static const char* PATH = "./log/client_logger";
 
@@ -60,7 +48,7 @@ int main(int argc, char const* argv[]) {
     Client *client = client_init(sock);;
     client_listener_args_t args;
     if (connect_to_server(sock, &address) && client_create_listener(client, &client_process_message, &args, &client_listener)){
-        printf(">");
+        log_print_prompt(LOG_USER,"Connected to server");
         while (running && !stop) {
             if (!get_input(buffer)) {
                 continue;
@@ -81,7 +69,11 @@ int main(int argc, char const* argv[]) {
                 }
                 if(client->logged_in){
                     //send message
-                    log_print_prompt(LOG_USER,"mensaje enviado:");
+                    char *str = strcat(command, " ");
+                    char *str2 = strcat(command, msg);
+                    send_public_text(client,str2);
+                    printf("\033[F\033[K");
+                    print_my_msg(command);
                 } else {
                     log_print_prompt(LOG_USER, "To send messages you need to login first!");
                 }
@@ -91,7 +83,8 @@ int main(int argc, char const* argv[]) {
             msg[0] = '\0';
         } 
     }
-    handle_disconnected(client);
+    free(client);
+    free(config);
     return 0;
 }
 
@@ -289,6 +282,27 @@ int de_identify_client(Client *client){
     return 1;
 }
 
+int send_public_text(Client *client, char *msg){
+    int sock = client->socket;
+    char json_str[256] = "";  // Start with an empty JSON string
+    const char *fields_and_values[][2] = {
+        {"type", "PUBLIC_TEXT"},
+        {"text",msg}
+    };
+
+    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+
+    if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
+        send(sock, json_str, strlen(json_str), 0);
+        log_file_formatted_message(PATH, LOG_INFO, "JSON sent to the server: %s", json_str);
+    } else {
+        log_file_message(PATH, LOG_ERROR,"Failed to build JSON ID.");
+        return 0;
+    }
+    return 1;
+}
+
+
 // Get input from the user
 bool get_input(char *buffer) {
     return fgets(buffer, MAX_BUFFER, stdin) != NULL;
@@ -367,8 +381,15 @@ void handle_text_from(Client *client,  char *buffer) {
     // TODO: Implement handling for text from user
 }
 
-void handle_public_text_from(Client *client,  char *buffer) {
-    // TODO: Implement handling for public text from user
+void handle_public_text_from(Client *client,  char *json_str) {
+    char msg[MAX_INPUT_MSG], user[USER_MAX_LENGHT]; 
+    if(!json_extract_field_value(json_str, "text", msg, MAX_INPUT_MSG) || !json_extract_field_value(json_str, "username", user, USER_MAX_LENGHT)){
+        log_server_message(PATH, LOG_ERROR, "Invalid JSON");
+        return;
+    }
+    printf("\n");
+    printf("\033[F\033[K");
+    print_msg(user, msg);
 }
 
 void handle_joined_room(Client *client,  char *buffer) {
@@ -457,6 +478,7 @@ void handle_text_response(Client *client,  char *json_str)
 {
 
 }
+
 void handle_unknown_operation_response(Client *client,  char *json_str)
 {
 

@@ -112,7 +112,6 @@ int connect_to_server(int server_fd, struct sockaddr_in *server_addr) {
         perror("Connection failed");
         return 0;
     }
-    printf("Connected to server\n");
     return 1;
 }
 

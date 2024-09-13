@@ -2,6 +2,21 @@
 #define JSON_UTILS_H
 
 #include <jansson.h>
+#define MAX_BUFFER 2048
+#define TYPE_MAX_LENGHT 32
+#define USER_MAX_LENGHT 9
+#define MAX_INPUT_MSG 255
+#define MAX_BUFFER_LOG 1024
+#define VALUE_MAX_LENGHT 32
+#define USER_MAX_LENGHT 9
+
+#define FIELD_OPERATION "operation"
+#define FIELD_USERNAME "username"
+#define FIELD_RESULT "result"
+#define FIELD_EXTRA "extra"
+#define VALUE_IDENTIFY "IDENTIFY"
+#define RESULT_SUCCESS "SUCCESS"
+#define RESULT_USER_ALREADY_EXISTS "USER_ALREADY_EXISTS"
 
 // Function to validate a JSON string
 int validate_json(const char *json_str, char *error_msg, size_t error_msg_size);

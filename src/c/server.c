@@ -13,9 +13,6 @@
 #include "json_utils.h"
 #include "connection.h"
 #include "logger.h"
-#define MAX_BUFFER 2048
-#define TYPE_MAX_LENGHT 32
-#define USER_MAX_LENGHT 9
 
 static const char* PATH = "./log/server_logger";
 
@@ -112,8 +109,9 @@ void *server_listener(void *arg){
         user_info->socket = sock;
         process_message(server, user_info, buffer, msg_type);
     }
+    server_remove_user(server,user_info);
+    log_server_message(PATH, LOG_SUCCESS, "User removed correctly");
     free(arg);
-    log_server_message(PATH, LOG_SUCCESS, "Disconnection successful");
     return NULL;
 }
 
@@ -136,7 +134,7 @@ void process_message(Server *server, UserInfo *user_info, char *buffer, const ch
             handle_text();
             break;
         case TYPE_PUBLIC_TEXT:
-            handle_public_text();
+            handle_public_text(server, user_info, buffer);
             break;
         case TYPE_NEW_ROOM:
             handle_new_room();
@@ -181,7 +179,7 @@ void handle_identify(Server *server, UserInfo *user_info, char* buffer){
     }
     UserInfo *found_user = g_hash_table_lookup(server->user_table, username);
     if (found_user) {
-        if(!identify_response_failed(user_info)){
+        if(!identify_response_failed(user_info, username)){
             log_server_message(PATH, LOG_ERROR, "failed sending the failed identification response.");
         }
         log_server_message(PATH, LOG_ERROR, "User already exists, choose another one %s", found_user->username);
@@ -192,8 +190,7 @@ void handle_identify(Server *server, UserInfo *user_info, char* buffer){
             log_server_message(PATH, LOG_ERROR,"Response to identification failed");
         }
         log_server_message(PATH, LOG_SUCCESS,"User '%s' added to the server user list.", user_info->username);
-        send_json_except_user(server,user_info);
-        log_server_message(PATH, LOG_SUCCESS,"All responses were sent to clients.");
+        new_user_identified_response(server, user_info);
     }
 
 }
@@ -220,8 +217,22 @@ void handle_text() {
     printf("Handling TEXT\n");
 }
 
-void handle_public_text() {
-    printf("Handling PUBLIC_TEXT\n");
+void handle_public_text(Server *server, UserInfo *user_info, const char *json_str) {
+    char msg[MAX_INPUT_MSG]; 
+    if(!json_extract_field_value(json_str, "text", msg, MAX_INPUT_MSG)){
+        log_server_message(PATH, LOG_ERROR, "Invalid JSON");
+        return;
+    }
+    const char *fields_and_values[][2] = {
+        {"type", "PUBLIC_TEXT_FROM"},
+        {"username", user_info->username},
+        {"text",msg}
+    };
+    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+
+    send_json_except_user(server,user_info, fields_and_values, num_fields);
+    log_server_message(PATH, LOG_SUCCESS,"All responses were sent to clients.");
+
 }
 
 void handle_new_room() {
@@ -249,11 +260,9 @@ void handle_leave_room() {
 }
 
 void handle_disconnect(Server *server, UserInfo *user_info) {
-    print_user_table(server);
     close(user_info->socket);
-    server_remove_user(server,user_info);
+    log_server_message(PATH, LOG_SUCCESS, "Disconnection successful");
     print_user_table(server);
-    log_server_message(PATH, LOG_SUCCESS, "Disconnected correctly");
 }
 
 
@@ -291,29 +300,37 @@ int identify_response_success(UserInfo *user_info){
 }
 
 
-int identify_response_failed(UserInfo *user_info){
+int identify_response_failed(UserInfo *user_info, const char *user){
     char json_str[256] = "";  // Start with an empty JSON string
     const char *fields_and_values[][2] = {
         {"type", "RESPONSE"},
         {"operation", "IDENTIFY"},
         {"result", "USER_ALREADY_EXISTS"},
-        {"extra", user_info->username}
+        {"extra", user}
     };
     size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
     return send_json_response(user_info->socket, json_str, sizeof(json_str), fields_and_values, num_fields);
 }
 
+void new_user_identified_response(Server *server, UserInfo *user_info){
+        const char *fields_and_values[][2] = {
+            {"type", "NEW_USER"},
+            {"username", user_info->username}
+        };
+        size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
 
-void send_json_except_user(Server *server, UserInfo *user_info) {
+        send_json_except_user(server,user_info, fields_and_values, num_fields);
+        log_server_message(PATH, LOG_SUCCESS,"All responses were sent to clients.");
+}
+
+
+
+void send_json_except_user(Server *server, UserInfo *user_info, const char *fields_and_values[][2], size_t num_fields) {
     GHashTableIter iter;
     gpointer key, value;
     char json_str[1024] = ""; // Buffer for the JSON string response
     const char *exclude_username =  user_info->username;
-    const char *fields_and_values[][2] = {
-        {"type", "NEW_USER"},
-        {"username", exclude_username}
-    };
-    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+    
     g_hash_table_iter_init(&iter, server->user_table);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         UserInfo *user = (UserInfo *)value;
@@ -478,7 +495,7 @@ MessageType server_get_type(const char *message_type) {
 
 // Function to print each key-value pair
 void print_entry(gpointer key, gpointer value, gpointer user_data) {
-    log_server_message(PATH, LOG_INFO,"Key: %s", (char *)key);
+    log_server_message(PATH, LOG_INFO,"USER: %s", (char *)key);
 }
 
 // Function to print all entries in the GHashTable

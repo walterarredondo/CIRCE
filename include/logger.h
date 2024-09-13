@@ -36,3 +36,11 @@ void log_server_message(const char *path, LogLevel level, const char* format, ..
 void log_print_file_message(const char *path, LogLevel level, const char *message);
 void log_file_formatted_message(const char *path, LogLevel log_level, const char *format, ...);
 char* string_printf(const char *format, ...);
+
+
+void print_msg(char *user, char* msg);
+
+const char* format_user_message(const char* username, const char* message);
+
+
+void print_my_msg(char* msg);

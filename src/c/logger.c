@@ -68,6 +68,25 @@ const char* format_log(LogLevel level, const char* message, int log_color, int l
     return formatted_msg;
 }
 
+const char* format_user_message(const char* username, const char* message) {
+    static char formatted_msg[MAX_BUFFER_LOG];  // Buffer for formatted message
+    time_t t = time(NULL);
+    struct tm *tm_info = localtime(&t);
+    char time_str[26];
+
+    // Set the color for the username
+    const char* username_color = COLOR_BLUE;  // Default color for username
+    const char* reset_color = COLOR_RESET;  // Reset after coloring
+
+    // Get the current time in the format HH:MM:SS
+    strftime(time_str, 26, "%H:%M", tm_info);
+
+    // Format the message
+    snprintf(formatted_msg, sizeof(formatted_msg), "[%s] %s%s%s : %s\n", time_str, username_color, username, reset_color, message);
+    return formatted_msg;
+}
+
+
 
 // Function to log a message to a file
 void log_file_message(const char *path, LogLevel level, const char *message) {
@@ -111,7 +130,16 @@ void log_print_prompt(LogLevel level, const char *format, ...){
     vsnprintf(prompt, sizeof(prompt), format, args);
     va_end(args);
 
-    printf("*%s*\n>", prompt);
+    printf("> %s%s%s\n> ", COLOR_MAGENTA, prompt, COLOR_RESET);
+}
+
+void print_msg(char *user, char* msg){
+    const char *str = format_user_message(user, msg);
+    printf("%s> ", str);
+}
+
+void print_my_msg(char* msg){
+    print_msg("Me", msg);
 }
 
 int ensure_log_directory(char *dir) {
