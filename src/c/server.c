@@ -75,9 +75,9 @@ UserInfo *initialize_user(int sock){
 
 void *server_listener(void *arg){
     server_listener_args_t *args = (server_listener_args_t *)arg;
-    UserInfo *user = args->user_info;
+    UserInfo *user_info = args->user_info;
     Server *server = args->server;
-    int sock = user->socket;
+    int sock = user_info->socket;
 
     if (server->user_table == NULL) {
         log_server_message(PATH, LOG_ERROR, "Error while creating user_table");
@@ -109,20 +109,20 @@ void *server_listener(void *arg){
             log_server_message(PATH, LOG_ERROR, "not a valid json: field 'type' missing");
             continue;
         }
-       process_message(server, sock, buffer, msg_type);
+       process_message(server, user_info, buffer, msg_type);
     }
     close(sock);
     return NULL;
 }
 
 
-void process_message(Server *server, int sock, char *buffer, const char *message_type) {
+void process_message(Server *server, UserInfo *user_info, char *buffer, const char *message_type) {
     // Use strcmp to compare strings and switch-case for handling various message types
     log_server_message(PATH, LOG_INFO,"Server processing message: %s", buffer);
     MessageType type = server_get_type(message_type);
     switch (type) {
         case TYPE_IDENTIFY:
-            handle_identify(server, sock, buffer);
+            handle_identify(server, user_info, buffer);
             break;
         case TYPE_STATUS:
             handle_status();
@@ -169,22 +169,23 @@ void process_message(Server *server, int sock, char *buffer, const char *message
 
 
 
-void handle_identify(Server *server, int sock, char* buffer){
+void handle_identify(Server *server, UserInfo *user_info, char* buffer){
     char username[USER_MAX_LENGHT];  
-    if(!parse_user(sock, buffer, username, USER_MAX_LENGHT)){
+    int sock = user_info->socket;
+    if(!parse_user(user_info, buffer, username, USER_MAX_LENGHT)){
         log_server_message(PATH, LOG_ERROR, "Idetification failed");
         close(sock);
         return;
     }
     UserInfo *found_user = g_hash_table_lookup(server->user_table, username);
     if (found_user) {
-        if(!identify_response_failed(sock,username)){
+        if(!identify_response_failed(user_info)){
             log_server_message(PATH, LOG_ERROR, "failed sending the failed identification response.");
         }
         log_server_message(PATH, LOG_ERROR, "User already exists, choose another one %s", found_user->username);
     } else {
-        server_add_user(server, username,1,sock);
-        if(!identify_response_success(sock,username)){
+        server_add_user(server, user_info, username,1,sock);
+        if(!identify_response_success(user_info)){
             log_server_message(PATH, LOG_ERROR,"Response to identification failed");
         }
         log_server_message(PATH, LOG_SUCCESS,"User '%s' added to the server user list.", username);
@@ -249,7 +250,7 @@ void handle_disconnect() {
 }
 
 
-int parse_user(int sock, char* json_str, char * username, size_t max_size){
+int parse_user(UserInfo *user_info, char* json_str, char * username, size_t max_size){
     const char *required_fields[] = {"type", "username"};
     size_t fields_len = sizeof(required_fields) /  sizeof(required_fields[0]); 
     if(!verify_json_fields(json_str,required_fields,fields_len)){
@@ -269,29 +270,29 @@ int parse_user(int sock, char* json_str, char * username, size_t max_size){
     return 1;
 }
 
-int identify_response_success(int sock, char *user){
+int identify_response_success(UserInfo *user_info){
     char json_str[256] = "";  // Start with an empty JSON string
     const char *fields_and_values[][2] = {
         {"type", "RESPONSE"},
         {"operation", "IDENTIFY"},
         {"result", "SUCCESS"},
-        {"extra", user}
+        {"extra", user_info->username}
     };
     size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
-    return send_json_response(sock, json_str, sizeof(json_str), fields_and_values, num_fields);
+    return send_json_response(user_info->socket, json_str, sizeof(json_str), fields_and_values, num_fields);
 }
 
 
-int identify_response_failed(int sock, char *user){
+int identify_response_failed(UserInfo *user_info){
     char json_str[256] = "";  // Start with an empty JSON string
     const char *fields_and_values[][2] = {
         {"type", "RESPONSE"},
         {"operation", "IDENTIFY"},
         {"result", "USER_ALREADY_EXISTS"},
-        {"extra", user}
+        {"extra", user_info->username}
     };
     size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
-    return send_json_response(sock, json_str, sizeof(json_str), fields_and_values, num_fields);
+    return send_json_response(user_info->socket, json_str, sizeof(json_str), fields_and_values, num_fields);
 }
 
 
@@ -323,7 +324,6 @@ void send_json_except_user(Server *server, const char *exclude_username) {
 int send_json_response(int sock, char *json_str, size_t json_str_size ,const char *fields_and_values[][2], size_t num_fields) {
     // Calculate the number of fields based on the size of fields_and_values
     // Build the JSON response
-
     if (build_json_response(json_str, json_str_size, fields_and_values, num_fields)) {
         // Send JSON response to the client
         send(sock, json_str, strlen(json_str), 0);
@@ -382,8 +382,11 @@ void free_user(gpointer data) {
 
 
 // Function to add a user to the server's user table
-void server_add_user(Server *server, const char *username, int status, int socket) {
+void server_add_user(Server *server, UserInfo *user_info, char *username, int status, int socket) {
     g_hash_table_insert(server->user_table, g_strdup(username), create_user(username, status, socket));
+    user_info->username = username;
+    user_info->socket = socket;
+    user_info->status = status;
 }
 
 // Function to remove a user from the server's user table

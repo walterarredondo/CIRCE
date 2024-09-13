@@ -49,7 +49,7 @@ static void handle_sigint(int _);
 
 //handle requests
 MessageType server_get_type(const char *message_type);
-void process_message(Server *server, int, char *, const char *);
+void process_message(Server *server, UserInfo *user_info, char *, const char *);
 void handle_identify();
 void handle_response();
 void handle_new_user();
@@ -67,16 +67,16 @@ void handle_disconnect();
 
 
 //server response 
-int identify_response_success(int sock, char *user);
-int identify_response_failed(int sock, char *user);
+int identify_response_success(UserInfo *user_info);
+int identify_response_failed(UserInfo *user_info);
 
 
 //server operations
-int parse_user(int sock, char* buffer, char * id, size_t max_size);
+int parse_user(UserInfo *user_info, char* buffer, char * id, size_t max_size);
 int send_json_response(int sock, char *json_str, size_t size_json_str, const char *fields_and_values[][2], size_t num_fields);
 void send_json_except_user(Server *server, const char *exclude_username);
 void server_cleanup(Server *server);
-void server_add_user(Server *server, const char *username, int status, int socket);
+void server_add_user(Server *server, UserInfo *user_info , char *username, int status, int socket);
 void server_remove_user(Server *server, const char *username);
 char* Server_acceptClient();
 
