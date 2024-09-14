@@ -108,7 +108,6 @@ void *server_listener(void *arg){
         user_info->socket = sock;
         process_message(server, user_info, buffer, msg_type);
     }
-    server_remove_user(server,user_info);
     log_server_message(PATH, LOG_SUCCESS, "User removed correctly");
     free(arg);
     return NULL;
@@ -287,7 +286,8 @@ void handle_leave_room() {
 }
 
 void handle_disconnect(Server *server, UserInfo *user_info) {
-    close(user_info->socket);
+    //close(user_info->socket);
+    server_remove_user(server,user_info);
     log_server_message(PATH, LOG_SUCCESS, "Disconnection successful");
     print_user_table(server);
 }
@@ -410,8 +410,8 @@ Server* server_init() {
 
 // Function to clean up the server and its user table
 void server_cleanup(Server *server) {
-    g_hash_table_destroy(server->user_table);
-    g_free(server);
+    //g_hash_table_destroy(server->user_table);
+    //g_free(server);
 }
 
 
@@ -426,8 +426,8 @@ UserInfo* create_user(UserInfo *user,const char *username, int status, int socke
 
 // Function to free the memory allocated for a user
 void free_user(gpointer data) {
-    UserInfo *user = (UserInfo *)data;
-    g_free(user);
+    //UserInfo *user = (UserInfo *)data;
+    //g_free(user);
 }
 
 
