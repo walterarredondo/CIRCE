@@ -9,7 +9,7 @@ CFLAGS = $(shell pkg-config --cflags glib-2.0)
 LDLIBS = $(shell pkg-config --libs glib-2.0)
 
 # Default target
-all: clean server client 
+all: clean dirs server client 
 
 server: $(SRC_DIR)/server.c $(INCLUDE_DIR)/server.h  $(INCLUDE_DIR)/json_utils.h  $(INCLUDE_DIR)/connection.h $(INCLUDE_DIR)/logger.h $(INCLUDE_DIR)/common.h
 	gcc -Wall -Wextra -Wno-unused-variable  -Wno-unused-parameter  -std=c11 -O2 -o $(BIN_DIR)/server $(SRC_DIR)/server.c $(SRC_DIR)/json_utils.c $(SRC_DIR)/connection.c $(SRC_DIR)/logger.c $(SRC_DIR)/common.c -I$(INCLUDE_DIR) $(CFLAGS) $(LDLIBS) -lglib-2.0 -ljansson -lpthread 
@@ -22,7 +22,10 @@ utils: $(SRC_DIR)/json_utils.c $(INCLUDE_DIR)/json_utils.h
 
 connection: $(SRC_DIR)/connection.c 
 	gcc -Wall -Wextra  -Wno-unused-variable -Wno-unused-parameter -std=c11 -O2 -o $(BIN_DIR)/connection $(SRC_DIR)/connection.c -I$(SRC_DIR)/connection.c -I$(INCLUDE_DIR) -lpthread
-	
+
+dirs :
+	mkdir -p ./bin ./log
+
 # Execute the main program
 execute: $(BIN_DIR)/main
 	$(BIN_DIR)/main 
