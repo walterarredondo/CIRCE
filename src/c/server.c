@@ -11,7 +11,6 @@
 #include <glib.h>
 #include "server.h"
 #include "json_utils.h"
-#include "connection.h"
 #include "logger.h"
 
 static const char* PATH = "./log/server_logger";
@@ -44,7 +43,7 @@ int main(int argc, char const* argv[]) {
     int server_fd = create_socket();
     set_socket_options(server_fd,config);
     bind_socket(server_fd, &address, config);
-    signal(SIGINT, handle_sigint);
+    signal(SIGINT, handle_sig);
     while (!stop){
         start_listening(server_fd, config);
         log_server_message(PATH, LOG_SUCCESS, "Server is listening...");
@@ -125,7 +124,7 @@ void process_message(Server *server, UserInfo *user_info, char *buffer, const ch
             handle_identify(server, user_info, buffer);
             break;
         case TYPE_STATUS:
-            handle_status();
+            handle_status(server, user_info, buffer);
             break;
         case TYPE_USERS:
             handle_users();
@@ -205,8 +204,36 @@ void handle_new_user() {
     printf("Handling NEW_USER\n");
 }
 
-void handle_status() {
-    printf("Handling STATUS\n");
+void handle_status(Server *server, UserInfo *user_info, char *json_str) {
+    char status[MAX_INPUT_MSG]; 
+    if(!json_extract_field_value(json_str, "status", status, MAX_INPUT_MSG)){
+        log_server_message(PATH, LOG_ERROR, "Invalid JSON");
+        return;
+    }
+    if(!isValidStatus(status))
+    {
+        log_server_message(PATH, LOG_ERROR, "Invalid STATUS");
+        return;
+    };
+    const char *fields_and_values[][2] = {
+        {"type", "STATUS"},
+        {"status",status},
+    };
+    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+    send_json_except_user(server,user_info, fields_and_values, num_fields);
+    log_server_message(PATH, LOG_SUCCESS,"All responses were sent to clients.");
+    
+}
+
+int isValidStatus(char *status) {
+    switch (get_status(status)) {
+        case ACTIVE:
+        case AWAY:
+        case BUSY:
+            return 1; // Valid statuses
+        default:
+            return 0; // Invalid status
+    }
 }
 
 void handle_users() {
@@ -418,7 +445,7 @@ void server_remove_user(Server *server, UserInfo *user_info) {
     }
 }
 
-static void handle_sigint(int _){
+static void handle_sig(int _){
     (void)_;
     //implement a way to close each socket, and close each thread
     log_server_message(PATH, LOG_INFO,"\ngoodbye...\n");

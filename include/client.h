@@ -1,13 +1,8 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 #include <stdbool.h>
-
-
-typedef enum {
-    ONLINE,
-    BUSY,
-    SLEEPING,
-} Status;
+#include "connection.h"
+#include "common.h"
 
 typedef struct {
     bool logged_in;    
@@ -44,6 +39,7 @@ enum Command {
     CMD_ECHO,
     CMD_LOGIN,
     CMD_LOGOUT,
+    CMD_STATUS,
     CMD_UNKNOWN
 };
 
@@ -65,6 +61,17 @@ void ask_for_username(char *username, int max_len);
 void login_client(Client *client, bool logged, Status status, const char *user);
 void update_client(Client *client, bool logged, Status status);
 int send_public_text(Client *client, char *msg);
+void handle_status_client(Client *client, const char *status, int params);
+int update_status(Client *client, const char *status);
+Status get_status(const char *statusStr);
+
+
+
+
+
+
+
+
 
 
 // functions that handle operations with the server
@@ -118,6 +125,10 @@ void handle_login(Client *client, const char *command, int n_params);
 void handle_logout(Client *client);
 // Handle unknown commands
 void handle_unknown(const char *command);
+
+
+
+int client_create_listener(Client *client, client_process_message_func process_message, client_listener_args_t *args, void *(*listener)(void *));
 
 
 #endif

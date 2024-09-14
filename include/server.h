@@ -1,5 +1,6 @@
 #ifndef CIRCE_SERVER_H
 #define CIRCE_SERVER_H
+#include "connection.h"
 
 typedef enum {
     TYPE_IDENTIFY = 1,
@@ -44,7 +45,7 @@ GList *create_thread_pool(Server *server, UserInfo *user, GList *thread_list);
 UserInfo *initialize_user();
 
 //manage exit
-static void handle_sigint(int _);
+static void handle_sig(int _);
 
 
 //handle requests
@@ -65,6 +66,9 @@ void handle_room_text();
 void handle_leave_room();
 void handle_disconnect(Server *server, UserInfo *user_info);
 
+
+void handle_status(Server *server, UserInfo *user_info, char *json_str);
+int isValidStatus(char *status);
 
 //server response 
 int identify_response_success(UserInfo *user_info);

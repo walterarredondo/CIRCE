@@ -12,7 +12,6 @@
 #include <glib.h> 
 #include "client.h"
 #include "json_utils.h"
-#include "connection.h"
 #include "logger.h"
 
 static const char* PATH = "./log/client_logger";
@@ -140,6 +139,9 @@ void execute_command(Client *client, const char *command, const char *args, int 
         case CMD_LOGOUT:
             handle_logout(client);
             break;
+        case CMD_STATUS:
+            handle_status_client(client, args, n_params);
+            break;
         default:
             handle_unknown(command);
             break;
@@ -155,7 +157,7 @@ Client *client_init(int sock)
     }
     client->logged_in = false;
     client->socket = sock;
-    client->status = ONLINE; // Set default status if needed
+    client->status = ACTIVE; // Set default status if needed
     return client;
 }
 
@@ -182,9 +184,44 @@ void handle_logout(Client *client){
     }
     if(de_identify_client(client)){
         log_print_prompt(LOG_USER,"You're logged out");
-        login_client(client,false,ONLINE,"");
+        login_client(client,false,ACTIVE,"");
     }
 }
+
+void handle_status_client(Client *client, const char *status, int params){
+    int sock = client->socket;
+    bool logged = client->logged_in;
+    Status stat;
+    if(params != 1 || (stat = get_status(status)) == INVALID){
+        log_server_message(PATH, LOG_USER, "not a valid status");
+    }
+    update_status(client, status);
+}
+
+int update_status(Client *client, const char* status){
+    client->status = get_status(status);
+    int sock = client->socket;
+    char json_str[256] = "";  // Start with an empty JSON string
+    const char *fields_and_values[][2] = {
+        {"type", "STATUS"},
+        {"status", status}
+    };
+
+    size_t num_fields = sizeof(fields_and_values) / sizeof(fields_and_values[0]);
+
+    if (build_json_response(json_str, sizeof(json_str), fields_and_values, num_fields)) {
+        send(sock, json_str, strlen(json_str), 0);
+        log_file_formatted_message(PATH, LOG_INFO, "JSON sent to the server: %s", json_str);
+    } else {
+        log_file_message(PATH, LOG_ERROR,"Failed to build JSON ID.");
+        return 0;
+    }
+    return 1;
+    
+}
+
+
+
 
 void client_process_message(Client *client,  char *buffer, const char *msg_type) {
     int socket = client->socket;
@@ -446,7 +483,7 @@ void handle_identify_response(Client *client,  char *json_str) {
         char extra[9] = { 0 };
         json_extract_field_value(json_str, FIELD_EXTRA,extra, VALUE_MAX_LENGHT);
         log_print_prompt(LOG_USER,"Welcome, %s!", extra);
-        login_client(client,true,ONLINE,extra);
+        login_client(client,true,ACTIVE,extra);
     }else if(strcmp(value, RESULT_USER_ALREADY_EXISTS) == 0){
         log_file_formatted_message(PATH, LOG_ERROR,"Identification failed. Received: %s", json_str);
         log_print_prompt(LOG_USER,"User already taken. Choose another one and log in","");
@@ -530,10 +567,28 @@ enum Command get_command_type(const char* command) {
         return CMD_LOGIN;
     } else if (strcmp(command, "\\logout") == 0) {
         return CMD_LOGOUT;
+    } else if (strcmp(command, "\\status") == 0) {
+        return CMD_STATUS;
     } else {
         log_print_prompt(LOG_USER, "Command not found");
         return CMD_UNKNOWN;
     }
+}
+
+
+
+int client_create_listener(Client *client, client_process_message_func process_message, client_listener_args_t *args, void *(*listener)(void *)) {
+    pthread_t ptid; 
+    args = malloc(sizeof(client_listener_args_t));
+    if (args == NULL) {
+        perror("malloc failure");
+        exit(EXIT_FAILURE);
+    }
+    args->client = client;
+    args->socket = client->socket;
+    args->client_process_message = process_message; 
+    pthread_create(&ptid, NULL, listener, (void *)args); 
+    return 1;
 }
 
 //void handle_not_known(Client *client,  char *buffer);
