@@ -120,7 +120,7 @@ void log_file_message(const char *path, LogLevel level, const char *message) {
 void log_print_message(LogLevel level, const char *message) {
     char buffer[MAX_BUFFER_LOG] = "";
     log_message(buffer, sizeof(buffer), level, message, 1, 1);
-    printf(buffer);
+    printf("%s",buffer);
 }
 
 void log_print_prompt(LogLevel level, const char *format, ...){
