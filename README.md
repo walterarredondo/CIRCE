@@ -60,4 +60,3 @@ Once the client is running, the following chat commands are available:
 ---
 
 Feel free to contribute, raise issues, or submit pull requests to help improve CIRCE.
-```
