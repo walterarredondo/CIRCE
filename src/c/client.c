@@ -268,16 +268,6 @@ void client_process_message(Client *client,  char *buffer, const char *msg_type)
     }
 }
 
-void ask_for_username(char *username, int max_len) {
-    printf("Enter your username: ");
-    fgets(username, max_len, stdin);
-
-    // Remove trailing newline character, if any
-    size_t len = strlen(username);
-    if (len > 0 && username[len - 1] == '\n') {
-        username[len - 1] = '\0';
-    }
-}
 
 int identify_client(int sock, const char *user){
     char json_str[256] = "";  // Start with an empty JSON string
