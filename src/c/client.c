@@ -375,6 +375,8 @@ void handle_help(const char *args) {
     printf("\\help - Show this help message\n");
     printf("\\echo <text> - Echo the provided text\n");
     printf("\\login USER - send identification message to the server\n");
+    printf("\\logout - logout from the server\n");
+    printf("\\status ACTIVE/AWAY/BUSY - change the current status to\n");
     printf("\\leave - Exit the program\n");
 }
 
